@@ -115,8 +115,46 @@ Done on this branch (all steps of the plan; not yet tested on the VM):
   `data_sources.get_back_to_back_sales_order_lines` / `get_back_to_back_purchase_lines`.
 - Planning no longer counts Back-to-Back Material Requests as pending supply.
 
-Next: user tests on the VM (`bench migrate`, `bench build --app procurement_planning`,
-`bench restart`), then the phase 1 fixes above.
+Tested on the VM on 2026-10-29: the whole flow works end to end (Quotation → Request
+Sourcing → MR → RFQ → two Supplier Quotations → Supplier Offers dialog ranked them with
+Best / Requested → Apply Selection set rate 275 from cost 220 and 20% margin → fields
+copied to the Sales Order → Create Back-to-Back POs made a draft PO linked to the MR, SO
+and Supplier Quotation → both reports show the order). The first migrate failed only
+because the VM disk was full (MariaDB 1114 "table is full"); fixed by extending the LV.
+
+### Phase 2 fixes from the VM test (do these first)
+
+1. Offer without a lead time: Promised Date stays empty and the PO "Required By" falls
+   back to the Sales Order delivery date. In the Supplier Offers dialog flag offers with
+   no lead time ("No lead time" badge, empty Promise shown as a warning) and ask for
+   confirmation before applying one; in Quotation `before_submit` warn (msgprint, not
+   throw) for sourcing lines without `promised_date`.
+2. Quotation form: the "Some items need sourcing…" headline was shown twice once
+   (`public/js/quotation.js` line ~29, `frm.dashboard.set_headline` called on more than
+   one event). Make it idempotent (clear first, or set it from a single place).
+3. Gross Profit on Quotation / Sales Order lines that are sourced is wrong: ERPNext uses
+   `valuation_rate`, which is 0 for an item with no stock, so a 275 × 10 line shows 2,750
+   profit instead of 550. For sourcing lines, set `valuation_rate` from
+   `estimated_landed_cost` (× conversion factor, in company currency) and recompute
+   `gross_profit` in the validate hook. Check in the v14 source where selling
+   controllers compute `gross_profit` so the value is not overwritten afterwards.
+4. Back-to-back PO: the client's PO has a mandatory custom header field
+   `expected_delivery_date` (also `production_end_date`, `custom_pi_date` are mandatory
+   there). When `Purchase Order` has `expected_delivery_date`, set it from the offer
+   (today + lead time) or the schedule date; also set the line `expected_delivery_date`.
+   Do not fill the other client fields.
+5. Back-to-Back Tracker: put Stage, Days Late, Expected Arrival and Purchase Order right
+   after Sales Order; move Item Name / Customer Name further right. The important columns
+   are cut off at normal screen width today.
+6. Back-to-Back Order Cost: the Sales Order row showed Ordered Qty 10 while its only PO
+   child row is a Draft with Ordered Qty 0. Make the parent consistent with the children:
+   count submitted PO quantity only, and show draft PO quantity in its own column.
+
+Open questions for the client (no code yet): should back-to-back Material Requests go
+through the normal MR approval workflow (it delays asking suppliers), and may sales users
+see supplier names and costs in the Supplier Offers dialog (today they can).
+
+After these, do the phase 1 fixes listed above.
 
 ## Phase 3 – later
 
