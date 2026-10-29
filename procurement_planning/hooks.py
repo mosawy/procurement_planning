@@ -135,6 +135,10 @@ doc_events = {
 	"Custom Role": {
 		"validate": "procurement_planning.permissions.validate_custom_role",
 	},
+	"Quotation": {
+		"validate": "procurement_planning.planning.back_to_back.validate_quotation",
+		"before_submit": "procurement_planning.planning.back_to_back.before_submit_quotation",
+	},
 }
 
 # Scheduled Tasks

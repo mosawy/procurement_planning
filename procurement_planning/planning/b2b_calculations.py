@@ -119,3 +119,68 @@ def back_to_back_stage(ordered_qty, shipped_qty, received_qty, delivered_qty, re
 	if has_draft_po:
 		return "PO Draft"
 	return "Not Ordered"
+
+
+def offer_expired(valid_till, on_date):
+	return bool(valid_till and valid_till < on_date)
+
+
+def evaluate_offer(
+	offer,
+	required_qty,
+	start_date,
+	landed_cost_percent=0,
+	fx_buffer_percent=0,
+	buffer_days=0,
+	excess_pricing=EXCESS_TO_STOCK,
+):
+	"""Cost, quantity and promise of one supplier offer for one customer line.
+
+	offer: unit_cost (company currency per stock UOM), min_order_qty (stock UOM),
+	foreign_currency, quotation_date, lead_time_days, expected_delivery_date,
+	valid_till. required_qty is in stock UOM.
+	"""
+	landed = estimated_landed_cost(
+		offer.get("unit_cost"),
+		landed_cost_percent,
+		fx_buffer_percent,
+		bool(offer.get("foreign_currency")),
+	)
+	purchase, excess = purchase_quantity(required_qty, offer.get("min_order_qty"))
+	lead_time = offer_lead_time(
+		offer.get("quotation_date"), offer.get("lead_time_days"), offer.get("expected_delivery_date")
+	)
+	return {
+		"landed_cost": landed,
+		"purchase_qty": purchase,
+		"excess_qty": excess,
+		"excess_pricing": excess_pricing,
+		"customer_unit_cost": customer_unit_cost(landed, required_qty, purchase, excess_pricing),
+		"lead_time_days": lead_time,
+		"promised_date": promised_date(start_date, lead_time, buffer_days),
+		"expired": offer_expired(offer.get("valid_till"), start_date),
+	}
+
+
+def quotation_rate(unit_cost, margin_percent_value, conversion_factor=1, conversion_rate=1):
+	"""Selling rate per quotation UOM in the quotation currency, from a unit cost
+	per stock UOM in the company currency."""
+	rate = selling_rate(unit_cost, margin_percent_value) * (conversion_factor or 1)
+	return rate / (conversion_rate or 1)
+
+
+def sourcing_status(lines):
+	"""Quotation sourcing status from its lines (dicts with needs_sourcing and supplier_quotation_item)."""
+	sourcing = [line for line in lines if line.get("needs_sourcing")]
+	if not sourcing:
+		return ""
+	if all(line.get("supplier_quotation_item") for line in sourcing):
+		return "Ready for Pricing"
+	return "Pending Sourcing"
+
+
+def purchase_order_split(customer_qty, min_order_qty=0):
+	"""(customer_qty, excess_qty) for the two Purchase Order lines of a
+	back-to-back Sales Order line, in the same UOM as the inputs."""
+	purchase, excess = purchase_quantity(customer_qty, min_order_qty)
+	return purchase - excess, excess

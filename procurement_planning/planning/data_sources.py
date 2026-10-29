@@ -396,6 +396,7 @@ def get_pending_purchase_requests(params):
 		where mr.docstatus = 1
 			and mr.company = %(company)s
 			and mr.material_request_type = 'Purchase'
+			and ifnull(mr.procurement_type, '') != 'Back-to-Back'
 			and mr.status not in ('Stopped', 'Closed')
 			and mri.stock_qty > mri.ordered_qty
 			and {_item_conditions(params)}
