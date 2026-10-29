@@ -7,7 +7,10 @@ const B2B_API = "procurement_planning.planning.back_to_back";
 
 frappe.ui.form.on("Quotation", {
 	refresh(frm) {
-		if (frm.is_new()) return;
+		if (frm.is_new()) {
+			set_sourcing_headline(frm);
+			return;
+		}
 		const group = __("Back-to-Back");
 		const sourcing = (frm.doc.items || []).some((d) => d.needs_sourcing);
 
@@ -25,13 +28,24 @@ frappe.ui.form.on("Quotation", {
 			);
 		}
 
-		if (frm.doc.docstatus === 0 && frm.doc.sourcing_status === "Pending Sourcing") {
-			frm.dashboard.set_headline(
-				__("Some items need sourcing. Select a supplier offer for each before submitting.")
-			);
-		}
+		set_sourcing_headline(frm);
 	},
 });
+
+function set_sourcing_headline(frm) {
+	// layout.show_message appends, so remove our own block first; other headlines stay
+	const $message = frm.layout.message;
+	$message.find(".b2b-sourcing-headline").remove();
+	if (!$message.children().length) frm.dashboard.clear_headline();
+
+	if (frm.doc.docstatus === 0 && frm.doc.sourcing_status === "Pending Sourcing") {
+		frm.dashboard.set_headline(
+			`<div class="b2b-sourcing-headline">${__(
+				"Some items need sourcing. Select a supplier offer for each before submitting."
+			)}</div>`
+		);
+	}
+}
 
 function request_sourcing(frm) {
 	if (frm.is_dirty()) {
