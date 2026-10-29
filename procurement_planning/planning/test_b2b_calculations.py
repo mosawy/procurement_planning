@@ -11,11 +11,13 @@ from procurement_planning.planning.b2b_calculations import (
 	EXCESS_TO_STOCK,
 	back_to_back_stage,
 	customer_unit_cost,
+	days_late,
 	estimated_landed_cost,
 	evaluate_offer,
 	margin_percent,
 	offer_lead_time,
 	promised_date,
+	purchase_line_cost,
 	purchase_order_split,
 	purchase_quantity,
 	quotation_rate,
@@ -154,3 +156,18 @@ class TestOfferEvaluation(unittest.TestCase):
 	def test_purchase_order_split(self):
 		self.assertEqual(purchase_order_split(10, 25), (10, 15))
 		self.assertEqual(purchase_order_split(30, 25), (30, 0))
+
+
+class TestTracking(unittest.TestCase):
+	def test_days_late(self):
+		self.assertEqual(days_late(date(2026, 11, 10), date(2026, 11, 5)), 5)
+		self.assertEqual(days_late(date(2026, 11, 1), date(2026, 11, 5)), -4)
+		self.assertIsNone(days_late(None, date(2026, 11, 5)))
+
+	def test_purchase_line_cost(self):
+		self.assertEqual(purchase_line_cost(0, 0, 10, 110), (110, "Estimated"))
+		self.assertEqual(purchase_line_cost(10, 1150, 0, 110), (115, "Actual"))
+		cost, basis = purchase_line_cost(5, 600, 5, 110)
+		self.assertAlmostEqual(cost, 115)
+		self.assertEqual(basis, "Mixed")
+		self.assertEqual(purchase_line_cost(0, 0, 0, 110), (None, "Estimated"))

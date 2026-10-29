@@ -597,3 +597,123 @@ def _item_conditions(params):
 
 def _has_field(doctype, fieldname):
 	return frappe.get_meta(doctype).has_field(fieldname)
+
+
+def get_back_to_back_sales_order_lines(filters):
+	"""Lines of submitted Sales Orders that need sourcing or have a Purchase Order
+	line (not cancelled) raised against them, limited to Sales Orders the user may read.
+
+	filters: company, sales_order, customer, priority, from_date, to_date.
+	"""
+	conditions = ["so.docstatus = 1", "so.company = %(company)s"]
+	if filters.get("sales_order"):
+		conditions.append("so.name = %(sales_order)s")
+	if filters.get("customer"):
+		conditions.append("so.customer = %(customer)s")
+	if filters.get("priority"):
+		conditions.append("so.priority = %(priority)s")
+	if filters.get("from_date"):
+		conditions.append("so.transaction_date >= %(from_date)s")
+	if filters.get("to_date"):
+		conditions.append("so.transaction_date <= %(to_date)s")
+
+	rows = frappe.db.sql(
+		f"""
+		select
+			soi.name, soi.parent as sales_order, soi.idx, so.customer, so.customer_name,
+			so.transaction_date, so.priority, so.required_by_date as order_required_by_date,
+			so.status as sales_order_status, soi.item_code, soi.item_name, soi.stock_uom,
+			soi.stock_qty, soi.conversion_factor, soi.delivered_qty, soi.base_net_rate,
+			soi.delivery_date, soi.needs_sourcing, soi.estimated_landed_cost, soi.promised_date,
+			soi.sourcing_supplier, soi.excess_qty, soi.excess_pricing
+		from `tabSales Order Item` soi
+		inner join `tabSales Order` so on so.name = soi.parent
+		where {" and ".join(conditions)}
+			and (
+				soi.needs_sourcing = 1
+				or exists (
+					select 1 from `tabPurchase Order Item` poi
+					where poi.sales_order_item = soi.name and poi.docstatus < 2
+				)
+			)
+		order by so.transaction_date, so.name, soi.idx
+		""",
+		filters,
+		as_dict=True,
+	)
+
+	names = list({row.sales_order for row in rows})
+	if not names:
+		return []
+	allowed = set(
+		frappe.get_list("Sales Order", filters={"name": ["in", names]}, pluck="name", limit_page_length=0)
+	)
+	return [row for row in rows if row.sales_order in allowed]
+
+
+def get_back_to_back_purchase_lines(sales_order_items):
+	"""Purchase Order lines (draft and submitted) raised against Sales Order lines,
+	in stock UOM, with their receipts at valuation (which includes Landed Cost
+	Vouchers) and, when shipments are tracked, shipped quantity and arrival date.
+
+	{sales_order_item: [rows]}.
+	"""
+	if not sales_order_items:
+		return {}
+
+	shipments = has_shipment_tracking()
+	shipment_columns = (
+		"ifnull(poi.shipment_quantity, 0) * poi.conversion_factor as shipped_qty, shp.arrival_date"
+		if shipments
+		else "0 as shipped_qty, null as arrival_date"
+	)
+	shipment_join = (
+		"""left join (
+			select psi.name_related as po_item, max(ps.shipment_arriving_date) as arrival_date
+			from `tabPurchase Shipment Item` psi
+			inner join `tabPurchase Shipment` ps on ps.name = psi.parent
+			where ps.docstatus = 1 and ifnull(psi.name_related, '') != ''
+			group by psi.name_related
+		) shp on shp.po_item = poi.name"""
+		if shipments
+		else ""
+	)
+
+	rows = frappe.db.sql(
+		f"""
+		select
+			poi.name, poi.parent as purchase_order, po.docstatus, po.status, po.supplier,
+			po.supplier_name, po.currency, poi.sales_order_item, poi.item_code,
+			poi.stock_qty, poi.received_qty * poi.conversion_factor as received_qty,
+			poi.base_net_rate / poi.conversion_factor as base_unit_rate,
+			coalesce(poi.expected_delivery_date, poi.schedule_date) as expected_date,
+			sup.landed_cost_percent,
+			ifnull(pr.received_stock_qty, 0) as receipt_qty,
+			ifnull(pr.received_value, 0) as receipt_value,
+			{shipment_columns}
+		from `tabPurchase Order Item` poi
+		inner join `tabPurchase Order` po on po.name = poi.parent
+		left join `tabSupplier` sup on sup.name = po.supplier
+		left join (
+			select pri.purchase_order_item, sum(pri.stock_qty) as received_stock_qty,
+				sum(pri.stock_qty * pri.valuation_rate) as received_value
+			from `tabPurchase Receipt Item` pri
+			inner join `tabPurchase Receipt` pr on pr.name = pri.parent
+			where pr.docstatus = 1 and pri.purchase_order_item in (
+				select linked.name from `tabPurchase Order Item` linked
+				where linked.sales_order_item in %(items)s
+			)
+			group by pri.purchase_order_item
+		) pr on pr.purchase_order_item = poi.name
+		{shipment_join}
+		where poi.sales_order_item in %(items)s and po.docstatus < 2
+		order by po.transaction_date, po.name, poi.idx
+		""",
+		{"items": list(sales_order_items)},
+		as_dict=True,
+	)
+
+	result = {}
+	for row in rows:
+		result.setdefault(row.sales_order_item, []).append(row)
+	return result

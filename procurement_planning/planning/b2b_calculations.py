@@ -184,3 +184,30 @@ def purchase_order_split(customer_qty, min_order_qty=0):
 	back-to-back Sales Order line, in the same UOM as the inputs."""
 	purchase, excess = purchase_quantity(customer_qty, min_order_qty)
 	return purchase - excess, excess
+
+
+def days_late(expected_date, promised):
+	"""Days the expected arrival falls after the customer promise (negative = early)."""
+	if not expected_date or not promised:
+		return None
+	return (expected_date - promised).days
+
+
+def purchase_line_cost(received_qty, received_value, open_qty, estimated_unit_cost):
+	"""(unit cost, basis) of a Purchase Order line: received quantity at its actual
+	valuation, the rest at the estimate. basis is Actual, Estimated or Mixed."""
+	received_qty = received_qty or 0
+	open_qty = max(open_qty or 0, 0)
+	parts = []
+	if received_qty > 0:
+		parts.append((received_qty, received_value / received_qty))
+	if open_qty > 0 and estimated_unit_cost is not None:
+		parts.append((open_qty, estimated_unit_cost))
+	_total, cost = weighted_average_cost(parts)
+	if received_qty > 0 and open_qty > 0:
+		basis = "Mixed"
+	elif received_qty > 0:
+		basis = "Actual"
+	else:
+		basis = "Estimated"
+	return cost, basis
