@@ -55,7 +55,7 @@ active) → planning screen uses the active run, creates draft Purchase Material
 → annual plan as draft Purchasing Blanket Orders + Annual Purchase Plan report.
 Tested end to end by the user on his VM.
 
-### Phase 1 fixes still to do (user asked to do them after phase 2)
+### Phase 1 fixes (all done on `phase-2-back-to-back`, not yet tested on the VM)
 
 1. Supplier inference (`data_sources.get_item_supplier_sources`): rank by quantity bought
    in the window, not latest date, and ignore PO lines with `sales_order` set
@@ -122,7 +122,7 @@ copied to the Sales Order → Create Back-to-Back POs made a draft PO linked to 
 and Supplier Quotation → both reports show the order). The first migrate failed only
 because the VM disk was full (MariaDB 1114 "table is full"); fixed by extending the LV.
 
-### Phase 2 fixes from the VM test (do these first)
+### Phase 2 fixes from the VM test (all six done, not yet re-tested on the VM)
 
 1. Offer without a lead time: Promised Date stays empty and the PO "Required By" falls
    back to the Sales Order delivery date. In the Supplier Offers dialog flag offers with
@@ -154,7 +154,19 @@ Open questions for the client (no code yet): should back-to-back Material Reques
 through the normal MR approval workflow (it delays asking suppliers), and may sales users
 see supplier names and costs in the Supplier Offers dialog (today they can).
 
-After these, do the phase 1 fixes listed above.
+Notes on the fixes:
+- Fix 3: `valuation_rate` is per stock UOM (gross_profit = (stock_uom_rate -
+  valuation_rate) x stock_qty), so it is set to `estimated_landed_cost` without the
+  conversion factor. Sales Order also got a `validate` hook. Documents saved before the
+  fix keep the old gross profit until saved again (submitted ones stay as they are).
+- Fix 4: the header date is the latest line date.
+- Phase 1 fix 2: the deduction applies to submitted, not-ordered Purchase MRs except
+  Back-to-Back ones; draft MRs are not deducted.
+- Phase 1 fix 4: field `calculation_queued_on` on Reorder Parameter Run; Calculate Now
+  limited to 3,000 items (`parameter_run.INLINE_ITEM_LIMIT`).
+
+Next: user re-tests on the VM (`bench migrate` for the new run field and JSON changes,
+`bench build --app procurement_planning`, `bench restart`).
 
 ## Phase 3 – later
 
