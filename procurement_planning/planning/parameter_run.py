@@ -5,11 +5,17 @@
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import cint, flt, get_datetime, now_datetime, time_diff_in_seconds
 
 RUN = "Reorder Parameter Run"
 LINE = "Reorder Parameter Line"
 REALTIME_EVENT = "reorder_parameter_run_calculated"
+
+# A queued calculation not started after this long most likely has no worker.
+STUCK_AFTER_MINUTES = 5
+# Calculate Now runs inside the web request; larger runs risk the request timeout.
+INLINE_ITEM_LIMIT = 3000
+JOB_TIMEOUT_SECONDS = 3600
 
 SUPPLIER_LAST_PO = "Last PO"
 SUPPLIER_MANUAL = "Manual"
@@ -47,23 +53,81 @@ def enqueue_calculation(run_name):
 	doc.check_permission("write")
 	if doc.docstatus != 0:
 		frappe.throw(_("Only a draft run can be calculated"))
-	if doc.status == "Calculating":
+	if doc.status == "Calculating" and not calculation_state(doc)["stuck"]:
 		frappe.throw(_("This run is already being calculated"))
 
-	doc.db_set("status", "Calculating")
+	doc.db_set({"status": "Calculating", "calculation_queued_on": now_datetime()})
 	frappe.enqueue(
 		"procurement_planning.planning.parameter_run.calculate",
 		queue="long",
-		timeout=3600,
+		timeout=JOB_TIMEOUT_SECONDS,
 		run_name=run_name,
 		user=frappe.session.user,
 		enqueue_after_commit=True,
 	)
 
 
+def calculate_inline(run_name):
+	"""Calculate within the request, for when background jobs do not run."""
+	from procurement_planning.planning import data_sources
+
+	doc = frappe.get_doc(RUN, run_name)
+	doc.check_permission("write")
+	if doc.docstatus != 0:
+		frappe.throw(_("Only a draft run can be calculated"))
+	if doc.status == "Calculating" and not calculation_state(doc)["stuck"]:
+		frappe.throw(_("This run is already being calculated in the background"))
+
+	params = data_sources.build_query_params(doc.company, doc.item_group, analysis_date=doc.analysis_date)
+	items = data_sources.count_items(params)
+	if items > INLINE_ITEM_LIMIT:
+		frappe.throw(
+			_(
+				"{0} items is too many to calculate inside the request (limit {1}). Use Calculate Parameters with background workers running, or run on the server: {2}"
+			).format(items, INLINE_ITEM_LIMIT, f"<br><code>{bench_command(run_name)}</code>")
+		)
+
+	doc.db_set({"status": "Calculating", "calculation_queued_on": None})
+	calculate(run_name, frappe.session.user)
+
+
+def calculation_state(doc):
+	"""Whether a Calculating run is stuck: its queued job never started, or
+	(runs from before calculation_queued_on existed, or a job that died) it has
+	not changed for longer than the job timeout."""
+	queued_on = doc.get("calculation_queued_on")
+	since = get_datetime(queued_on or doc.modified)
+	waited = time_diff_in_seconds(now_datetime(), since) / 60
+	limit = STUCK_AFTER_MINUTES if queued_on else JOB_TIMEOUT_SECONDS / 60
+	return {
+		"queued": bool(queued_on),
+		"minutes_waiting": int(waited),
+		"stuck": doc.status == "Calculating" and waited >= limit,
+		"bench_command": bench_command(doc.name),
+	}
+
+
+def bench_command(run_name):
+	return (
+		f"bench --site {frappe.local.site} execute "
+		f"procurement_planning.planning.parameter_run.calculate --kwargs \"{{'run_name': '{run_name}'}}\""
+	)
+
+
 def calculate(run_name, user=None):
-	"""Replace the run's lines with freshly calculated parameters."""
+	"""Replace the run's lines with freshly calculated parameters.
+
+	Runs as the background job, from calculate_inline, or from the server:
+	bench --site <site> execute procurement_planning.planning.parameter_run.calculate
+	--kwargs "{'run_name': '<run>'}"
+	"""
 	from procurement_planning.planning import api
+
+	if not run_is_editable(run_name):
+		frappe.throw(_("Only a draft run can be calculated"))
+	# Started: clear the queue mark so the form no longer reports a stuck job.
+	frappe.db.set_value(RUN, run_name, {"status": "Calculating", "calculation_queued_on": None})
+	frappe.db.commit()
 
 	doc = frappe.get_doc(RUN, run_name)
 	try:

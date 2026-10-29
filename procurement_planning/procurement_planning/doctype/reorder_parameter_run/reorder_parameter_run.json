@@ -18,6 +18,7 @@
   "status",
   "is_active",
   "last_calculated_on",
+  "calculation_queued_on",
   "status_column",
   "total_items",
   "changed_items",
@@ -107,6 +108,14 @@
    "read_only": 1
   },
   {
+   "fieldname": "calculation_queued_on",
+   "fieldtype": "Datetime",
+   "label": "Calculation Queued On",
+   "no_copy": 1,
+   "read_only": 1,
+   "description": "Set when a background calculation is queued and cleared when the job starts. Still set after a few minutes means the job never started."
+  },
+  {
    "fieldname": "status_column",
    "fieldtype": "Column Break"
   },
@@ -161,7 +170,7 @@
  "index_web_pages_for_search": 0,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-29 18:00:00.000000",
+ "modified": "2026-10-29 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Reorder Parameter Run",

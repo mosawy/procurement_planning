@@ -18,14 +18,10 @@ frappe.ui.form.on("Reorder Parameter Run", {
 		const doc = frm.doc;
 
 		if (doc.docstatus === 0 && doc.status !== "Calculating") {
-			frm.add_custom_button(
-				doc.total_items ? __("Recalculate") : __("Calculate Parameters"),
-				() =>
-					frm.call("calculate").then((r) => {
-						if (r.message) frappe.show_alert({ message: r.message, indicator: "blue" });
-						frm.reload_doc();
-					})
+			frm.add_custom_button(doc.total_items ? __("Recalculate") : __("Calculate Parameters"), () =>
+				calculate_in_background(frm)
 			);
+			frm.add_custom_button(__("Calculate Now"), () => calculate_now(frm));
 		}
 
 		if (doc.total_items) {
@@ -44,10 +40,58 @@ frappe.ui.form.on("Reorder Parameter Run", {
 	},
 });
 
+function calculate_in_background(frm) {
+	frm.call("calculate").then((r) => {
+		if (r.message) frappe.show_alert({ message: r.message, indicator: "blue" });
+		frm.reload_doc();
+	});
+}
+
+function calculate_now(frm) {
+	frappe.confirm(
+		__("Calculate inside this request instead of a background job? Use this for small companies or when background workers are not running."),
+		() =>
+			frm
+				.call({ method: "calculate_now", freeze: true, freeze_message: __("Calculating parameters...") })
+				.then((r) => {
+					if (r.message) frappe.show_alert({ message: r.message, indicator: "green" });
+					frm.reload_doc();
+				})
+	);
+}
+
+function show_calculating(frm) {
+	frm.call("get_calculation_state").then((r) => {
+		const state = r.message || {};
+		frm.dashboard.clear_headline();
+		if (!state.stuck) {
+			frm.dashboard.set_headline(
+				state.queued
+					? __("Calculation queued {0} minute(s) ago, waiting for a background worker. This form refreshes when it finishes.", [state.minutes_waiting])
+					: __("Calculating parameters in the background. This form refreshes when it finishes.")
+			);
+			return;
+		}
+
+		frm.dashboard.set_headline(
+			`${
+				state.queued
+					? __("The background calculation was queued {0} minutes ago and has not started: background workers are probably not running.", [state.minutes_waiting])
+					: __("The calculation has not finished after {0} minutes: the background job probably stopped.", [state.minutes_waiting])
+			}<br>${__("Use Calculate Now, or run on the server:")} <code>${frappe.utils.escape_html(state.bench_command)}</code>`,
+			"orange"
+		);
+		frm.add_custom_button(__("Calculate Now"), () => calculate_now(frm));
+		frm.add_custom_button(__("Retry in Background"), () => calculate_in_background(frm));
+	});
+}
+
 function show_status(frm) {
 	const doc = frm.doc;
+	// layout.show_message appends: clear so a refresh does not repeat the headline
+	frm.dashboard.clear_headline();
 	if (doc.status === "Calculating") {
-		frm.dashboard.set_headline(__("Calculating parameters in the background. This form refreshes when it finishes."));
+		show_calculating(frm);
 		return;
 	}
 	if (!doc.total_items) {
@@ -65,6 +109,7 @@ function show_status(frm) {
 			__("{0} without supplier", [s.no_supplier || 0]),
 			__("{0} using a default or no lead time", [s.weak_lead_time || 0]),
 		];
+		frm.dashboard.clear_headline();
 		frm.dashboard.set_headline(parts.join(" · "));
 	});
 }

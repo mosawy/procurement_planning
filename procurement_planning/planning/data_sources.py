@@ -87,6 +87,10 @@ def get_items(params):
 	return {row.item_code: row for row in rows}
 
 
+def count_items(params):
+	return frappe.db.sql(f"select count(*) from `tabItem` i where {_item_conditions(params)}", params)[0][0]
+
+
 def get_stock_balances(params):
 	"""Bin.actual_qty over every leaf warehouse of the company.
 

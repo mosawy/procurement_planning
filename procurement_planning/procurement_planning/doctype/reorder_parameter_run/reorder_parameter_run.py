@@ -61,6 +61,16 @@ class ReorderParameterRun(Document):
 		return _("Calculation started. The form refreshes when it finishes.")
 
 	@frappe.whitelist()
+	def calculate_now(self):
+		frappe.only_for(ALLOWED_ROLES)
+		parameter_run.calculate_inline(self.name)
+		return _("Parameters calculated")
+
+	@frappe.whitelist()
+	def get_calculation_state(self):
+		return parameter_run.calculation_state(self)
+
+	@frappe.whitelist()
 	def get_summary(self):
 		"""Counts for the form dashboard."""
 		lines = frappe.db.sql(

@@ -30,6 +30,10 @@ bench restart
    date), click *Calculate Parameters*, review lines (*Review Lines* opens an
    editable report view), give a reason for any changed value, then submit.
    The submitted run becomes the active one for the company.
+   *Calculate Parameters* runs as a background job. When background workers do
+   not run, the form says so after a few minutes; use *Calculate Now* (inside
+   the request, up to 3,000 items) or run on the server:
+   `bench --site <site> execute procurement_planning.planning.parameter_run.calculate --kwargs "{'run_name': '<run>'}"`.
 4. **Planning screen** (`/app/procurement-planning`) – uses the active run's
    approved parameters, shows supplier, lead time source and suggested value,
    and creates a draft Purchase Material Request from selected rows. A
