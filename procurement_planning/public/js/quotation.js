@@ -111,17 +111,31 @@ function show_supplier_offers(frm) {
 				s.margin_percent = values.margin_percent;
 				s.set_rate = values.set_rate ? 1 : 0;
 			});
-			frappe
-				.call({
-					method: `${B2B_API}.select_offers`,
-					args: { quotation: frm.doc.name, selections },
-					freeze: true,
-				})
-				.then(() => {
-					dialog.hide();
-					frm.reload_doc();
-					frappe.show_alert({ message: __("Supplier offers applied"), indicator: "green" });
-				});
+			const apply = () =>
+				frappe
+					.call({
+						method: `${B2B_API}.select_offers`,
+						args: { quotation: frm.doc.name, selections },
+						freeze: true,
+					})
+					.then(() => {
+						dialog.hide();
+						frm.reload_doc();
+						frappe.show_alert({ message: __("Supplier offers applied"), indicator: "green" });
+					});
+
+			const no_lead_time = rows_without_lead_time(data, selections);
+			if (no_lead_time.length) {
+				frappe.confirm(
+					__(
+						"The offers for rows {0} have no lead time, so no date can be promised to the customer and the Purchase Order falls back to the Sales Order delivery date. Apply anyway?",
+						[no_lead_time.join(", ")]
+					),
+					apply
+				);
+			} else {
+				apply();
+			}
 		},
 	});
 
@@ -163,6 +177,16 @@ function collect_selections(dialog, data) {
 		}
 	});
 	return selections;
+}
+
+function rows_without_lead_time(data, selections) {
+	const rows = [];
+	selections.forEach((s) => {
+		const line = data.lines.find((l) => l.quotation_item === s.quotation_item);
+		const offer = line && line.offers.find((o) => o.supplier_quotation_item === s.supplier_quotation_item);
+		if (offer && (offer.lead_time_days === null || offer.lead_time_days === undefined)) rows.push(line.idx);
+	});
+	return rows;
 }
 
 function render_offers(dialog, data, editable, checked) {
@@ -226,6 +250,8 @@ function render_offers(dialog, data, editable, checked) {
 			if (index === 0 && !offer.expired) flags.push(`<span class="indicator-pill green">${__("Best")}</span>`);
 			if (offer.linked) flags.push(`<span class="indicator-pill blue">${__("Requested")}</span>`);
 			if (offer.expired) flags.push(`<span class="indicator-pill red">${__("Expired")}</span>`);
+			const no_lead_time = offer.lead_time_days === null || offer.lead_time_days === undefined;
+			if (no_lead_time) flags.push(`<span class="indicator-pill orange">${__("No lead time")}</span>`);
 			const is_selected = offer.supplier_quotation_item === selected;
 
 			html += `<tr class="${is_selected ? "table-active" : ""}">
@@ -245,7 +271,13 @@ function render_offers(dialog, data, editable, checked) {
 				<td class="text-right">${offer.purchase_qty} / ${offer.excess_qty}</td>
 				<td class="text-right"><strong>${company_money(offer.customer_unit_cost)}</strong></td>
 				<td class="text-right">${offer.lead_time_days === null ? "" : offer.lead_time_days}</td>
-				<td>${date(offer.promised_date)}</td>
+				<td>${
+					no_lead_time
+						? `<span class="text-warning" title="${__(
+								"Set Lead Time in days or Expected Delivery Date on the Supplier Quotation"
+						  )}">${__("No promise")}</span>`
+						: date(offer.promised_date)
+				}</td>
 				<td>${date(offer.valid_till)}</td>
 			</tr>`;
 		});

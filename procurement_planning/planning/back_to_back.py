@@ -390,14 +390,25 @@ def validate_quotation(doc, method=None):
 
 
 def before_submit_quotation(doc, method=None):
-	"""Block submit while a sourcing line has no supplier offer; warn when the
-	quotation is valid longer than a supplier offer it relies on."""
+	"""Block submit while a sourcing line has no supplier offer; warn when a
+	sourcing line has no promised date, or the quotation is valid longer than a
+	supplier offer it relies on."""
 	missing = [str(d.idx) for d in doc.items if d.get("needs_sourcing") and not d.get("supplier_quotation_item")]
 	if missing:
 		frappe.throw(
 			_("Rows {0} need sourcing and have no supplier offer selected. Use Supplier Offers first.").format(
 				", ".join(missing)
 			)
+		)
+
+	no_promise = [str(d.idx) for d in doc.items if d.get("needs_sourcing") and not d.get("promised_date")]
+	if no_promise:
+		frappe.msgprint(
+			_(
+				"Rows {0} have no Promised Date: the supplier offer has no lead time. The Purchase Order will use the Sales Order delivery date."
+			).format(", ".join(no_promise)),
+			title=_("No promised date"),
+			indicator="orange",
 		)
 
 	if not doc.valid_till:
