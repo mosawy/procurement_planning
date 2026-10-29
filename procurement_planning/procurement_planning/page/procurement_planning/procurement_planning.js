@@ -481,7 +481,7 @@
 			const other_warnings = row.warnings.length - shown;
 			const supplier = row.supplier ? frappe.utils.escape_html(row.supplier) : "";
 			const supplier_note =
-				row.supplier_source === "Last PO" ? `<div class="pp-item-name">${__("from latest PO")}</div>` : "";
+				row.supplier_source === "Last PO" ? `<div class="pp-item-name">${__("from PO history")}</div>` : "";
 			const warning_title = frappe.utils.escape_html(
 				row.warnings.map((w) => this.data.warning_labels[w] || w).join("\n")
 			);

@@ -61,7 +61,7 @@ function show_status(frm) {
 			__("{0} items", [s.total || 0]),
 			__("{0} overridden", [s.overridden || 0]),
 			__("{0} with a change of 50% or more", [s.big_changes || 0]),
-			__("{0} suppliers inferred from the latest PO", [s.inferred_suppliers || 0]),
+			__("{0} suppliers inferred from PO history", [s.inferred_suppliers || 0]),
 			__("{0} without supplier", [s.no_supplier || 0]),
 			__("{0} using a default or no lead time", [s.weak_lead_time || 0]),
 		];

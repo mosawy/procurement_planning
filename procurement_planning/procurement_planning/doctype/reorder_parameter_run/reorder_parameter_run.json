@@ -138,7 +138,7 @@
   },
   {
    "default": "0",
-   "description": "For lines whose supplier came from the latest Purchase Order, set it as the Item's default supplier for this company.",
+   "description": "For lines whose supplier was inferred from Purchase Order history, set it as the Item's default supplier for this company.",
    "fieldname": "apply_suppliers",
    "fieldtype": "Check",
    "label": "Save Inferred Suppliers to Items on Approval"
@@ -161,7 +161,7 @@
  "index_web_pages_for_search": 0,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-29 12:00:00.000000",
+ "modified": "2026-10-29 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Reorder Parameter Run",

@@ -123,7 +123,7 @@
   },
   {
    "default": "24",
-   "description": "When an item has no supplier maintained, the supplier of its latest Purchase Order in this window is used.",
+   "description": "When an item has no supplier maintained, the supplier it was bought from most in this window is used (back-to-back purchases ignored).",
    "fieldname": "supplier_history_months",
    "fieldtype": "Int",
    "label": "Supplier History Months"
@@ -180,7 +180,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-29 12:00:00.000000",
+ "modified": "2026-10-29 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Procurement Planning Settings",

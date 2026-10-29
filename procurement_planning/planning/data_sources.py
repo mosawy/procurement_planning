@@ -12,6 +12,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, get_first_day, get_last_day, getdate, today
 
+from procurement_planning.planning.lead_time import pick_history_supplier
+
 # Standard Warehouse Type created by ERPNext (setup install_fixtures).
 TRANSIT_WAREHOUSE_TYPE = "Transit"
 
@@ -452,9 +454,11 @@ def get_item_supplier_sources(params, history_months):
 
 	- item_default: Item Default.default_supplier for the company
 	- item_supplier: first Item Supplier row
-	- last_po: supplier of the latest submitted Purchase Order of the company in
-	  the history window ending on the analysis date (ties go to the supplier
-	  with more orders)
+	- last_po: supplier the item was bought from most (stock UOM quantity) on
+	  submitted Purchase Orders of the company in the history window ending on
+	  the analysis date; ties go to the latest order, then more orders.
+	  Back-to-back lines (sales_order set) are ignored: they follow one
+	  customer's order, not the normal source of the item.
 	"""
 	result = {}
 
@@ -481,26 +485,28 @@ def get_item_supplier_sources(params, history_months):
 	history_from = add_months(params.analysis_date, -cint(history_months or 24))
 	rows = frappe.db.sql(
 		f"""
-		select poi.item_code, po.supplier, max(po.transaction_date) as last_date, count(distinct po.name) as orders
+		select poi.item_code, po.supplier, sum(poi.stock_qty) as qty,
+			max(po.transaction_date) as last_date, count(distinct po.name) as orders
 		from `tabPurchase Order Item` poi
 		inner join `tabPurchase Order` po on po.name = poi.parent
 		inner join `tabItem` i on i.name = poi.item_code
 		where po.docstatus = 1
 			and po.company = %(company)s
 			and po.transaction_date between %(history_from)s and %(analysis_date)s
+			and ifnull(poi.sales_order, '') = ''
 			and {_item_conditions(params)}
 		group by poi.item_code, po.supplier
 		""",
 		dict(params, history_from=history_from),
 		as_dict=True,
 	)
-	best = {}
+	candidates = {}
 	for row in rows:
-		rank = (getdate(row.last_date), cint(row.orders))
-		if row.item_code not in best or rank > best[row.item_code][0]:
-			best[row.item_code] = (rank, row.supplier)
-	for item_code, (_rank, supplier) in best.items():
-		result.setdefault(item_code, {})["last_po"] = supplier
+		candidates.setdefault(row.item_code, []).append(
+			(row.supplier, flt(row.qty), getdate(row.last_date), cint(row.orders))
+		)
+	for item_code, item_candidates in candidates.items():
+		result.setdefault(item_code, {})["last_po"] = pick_history_supplier(item_candidates)
 
 	return result
 

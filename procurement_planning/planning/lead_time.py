@@ -7,6 +7,7 @@ Pure functions only (no database access).
 """
 
 import math
+from datetime import date
 
 DEFAULT_MIN_SAMPLES = 3
 
@@ -102,8 +103,22 @@ def resolve_lead_time(item_lead_time, supplier, brand, profile_lead_times, defau
 	return None, None, None
 
 
+def pick_history_supplier(candidates):
+	"""Supplier bought from most in the history window.
+
+	candidates: [(supplier, stock_qty, last_date, orders)]. Ranked by quantity,
+	then the latest order, then the number of orders.
+	"""
+	best = None
+	for supplier, qty, last_date, orders in candidates:
+		rank = (qty or 0, last_date or date.min, orders or 0)
+		if best is None or rank > best[0]:
+			best = (rank, supplier)
+	return best[1] if best else None
+
+
 def resolve_supplier(item_default_supplier, item_supplier, last_po_supplier):
-	"""(supplier, source) from maintained data first, then the latest Purchase Order."""
+	"""(supplier, source) from maintained data first, then purchase history."""
 	if item_default_supplier:
 		return item_default_supplier, SUPPLIER_ITEM_DEFAULT
 	if item_supplier:

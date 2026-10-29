@@ -44,8 +44,9 @@ bench restart
   at least the configured share of days.
 - Lead time: Item, then Lead Time Profile (supplier + brand, supplier, brand),
   then the company default. Items with none are flagged.
-- Supplier: Item Default for the company, then Item Supplier, then the latest
-  Purchase Order (flagged as inferred).
+- Supplier: Item Default for the company, then Item Supplier, then the supplier
+  the item was bought from most in the supplier history window (flagged as
+  inferred; back-to-back Purchase Order lines are ignored).
 - Open POs late beyond the tolerance are not counted as supply. Quantities
   shipped on a submitted Purchase Shipment (purchase_shipment_management) count
   at the shipment arrival date.

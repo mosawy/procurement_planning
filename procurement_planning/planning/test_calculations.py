@@ -19,6 +19,7 @@ from procurement_planning.planning.lead_time import (
 	SUPPLIER_ITEM_DEFAULT,
 	SUPPLIER_LAST_PO,
 	effective_entry,
+	pick_history_supplier,
 	resolve_lead_time,
 	resolve_supplier,
 	summarise_lead_times,
@@ -342,6 +343,22 @@ class TestLeadTime(unittest.TestCase):
 		self.assertEqual(resolve_supplier("A", "B", "C"), ("A", SUPPLIER_ITEM_DEFAULT))
 		self.assertEqual(resolve_supplier(None, None, "C"), ("C", SUPPLIER_LAST_PO))
 		self.assertEqual(resolve_supplier(None, None, None), (None, None))
+
+	def test_history_supplier_by_quantity(self):
+		# a local supplier bought from recently but little loses to the main source
+		candidates = [
+			("Local", 5, date(2026, 9, 1), 1),
+			("Hikvision", 400, date(2026, 6, 1), 3),
+		]
+		self.assertEqual(pick_history_supplier(candidates), "Hikvision")
+		# equal quantity: the latest order wins, then more orders
+		self.assertEqual(
+			pick_history_supplier([("A", 10, date(2026, 1, 1), 5), ("B", 10, date(2026, 2, 1), 1)]), "B"
+		)
+		self.assertEqual(
+			pick_history_supplier([("A", 10, date(2026, 2, 1), 2), ("B", 10, date(2026, 2, 1), 1)]), "A"
+		)
+		self.assertIsNone(pick_history_supplier([]))
 
 
 if __name__ == "__main__":
