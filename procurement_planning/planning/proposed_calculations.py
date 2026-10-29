@@ -37,11 +37,12 @@ WARNING_LABELS = {
 	"UNDATED_PO": "PO quantity without expected date not counted as supply",
 	"PO_BEYOND_HORIZON": "PO quantity due after the planning horizon not counted as supply",
 	"FUTURE_SALES_ORDERS": "Sales Order quantity due after the planning horizon not counted as demand",
+	"PENDING_MR_SUBTRACTED": "Submitted Purchase Material Requests not yet ordered were subtracted from the suggestion",
 	"MOQ_APPLIED": "Raised to the Item Minimum Order Qty",
 	"ORDER_MULTIPLE_APPLIED": "Rounded up to the purchase order multiple",
 	"APPROVED_PARAMETERS": "Safety stock, reorder level and target stock come from the approved parameter run",
 	"NO_SUPPLIER": "No supplier found for the item",
-	"SUPPLIER_INFERRED": "Supplier inferred from the latest Purchase Order, not maintained on the item",
+	"SUPPLIER_INFERRED": "Supplier inferred from Purchase Order history, not maintained on the item",
 }
 
 # Warnings that mean planning data is missing rather than informational.
@@ -113,6 +114,7 @@ def calculate_proposed(
 	stockout_months_excluded=0,
 	all_months_stockout=False,
 	approved=None,
+	pending_requests=0,
 ):
 	"""Proposed planning values.
 
@@ -120,6 +122,9 @@ def calculate_proposed(
 	quantity due within the planning horizon; open_so_future is shown only.
 	approved, when given, is {"safety_stock", "reorder_level", "target_stock"}
 	from an approved parameter run and replaces the calculated parameters.
+	pending_requests is the quantity on submitted Purchase Material Requests not
+	yet ordered: already requested, so it is subtracted from the suggestion (it
+	is not supply yet, so the stock-out risk ignores it).
 	"""
 	warnings = []
 
@@ -197,8 +202,12 @@ def calculate_proposed(
 	required_stock = max(target_stock, open_so + safety_stock)
 	baseline_demand = required_stock - safety_stock
 	purchase_need = required_stock - inventory_position
+	pending_requests = max(0, pending_requests or 0)
+	unrequested_need = purchase_need - pending_requests
+	if pending_requests and purchase_need > 0:
+		warnings.append("PENDING_MR_SUBTRACTED")
 
-	suggested_before_moq = max(0, ceil_qty(purchase_need))
+	suggested_before_moq = max(0, ceil_qty(unrequested_need))
 	suggested_purchase = suggested_before_moq
 	if suggested_purchase and min_order_qty and suggested_purchase < min_order_qty:
 		suggested_purchase = min_order_qty
@@ -242,6 +251,7 @@ def calculate_proposed(
 		"below_reorder_level": reorder_level > 0 and inventory_position < reorder_level,
 		"required_stock": required_stock,
 		"purchase_need": purchase_need,
+		"pending_requests": pending_requests,
 		"suggested_before_moq": suggested_before_moq,
 		"moq_adjustment": moq_adjustment,
 		"multiple_adjustment": multiple_adjustment,

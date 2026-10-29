@@ -599,7 +599,7 @@
 				${stat(__("Open Purchase Orders"), item.open_po, __("In transit {0} · Due {1} · Late {2} · Overdue {3} · Later {4} · Undated {5}", [po.in_transit + po.in_transit_late, po.due, po.late, po.overdue, po.beyond, po.undated].map(format_qty)))}
 				${item.back_to_back_so || item.back_to_back_po ? stat(__("Back-to-Back (excluded)"), null, __("SO {0} · PO {1}", [format_qty(item.back_to_back_so), format_qty(item.back_to_back_po)]), true) : ""}
 				${stat(__("Next Expected PO"), null, format_date(item.next_expected_po_date), true)}
-				${stat(__("Pending Purchase MR"), item.pending_pr, __("Not PR Foreign; not subtracted"))}
+				${stat(__("Pending Purchase MR"), item.pending_pr, __("Not PR Foreign; subtracted from the suggestion"))}
 				${stat(__("Net Sales (months used)"), item.net_sales, __("{0} months used of {1} · {2} stock-out months left out", [item.eligible_months, this.settings.analysis_months, (item.stockout_months || []).length]))}
 				${stat(__("Net Sales (fixed 12 months)"), item.net_sales_12m, __("{0} months with sales", [item.months_with_sales]))}
 				${stat(__("Supplier"), null, item.supplier ? `${item.supplier} (${__(item.supplier_source)})` : __("Not found"), true)}
@@ -686,7 +686,7 @@
 				[__("Purchase Need"), `${format_qty(p.required_stock)} − ${format_qty(p.inventory_position)}`, format_qty(p.purchase_need)],
 				[__("MOQ Adjustment"), __("Item Minimum Order Qty {0}", [format_qty(item.min_order_qty)]), format_qty(p.moq_adjustment)],
 				[__("Order Multiple"), __("Round up to {0}", [format_qty(item.order_multiple)]), format_qty(p.multiple_adjustment)],
-				[__("Suggested Purchase"), `max(0, ceil(${format_qty(p.purchase_need)})) + ${format_qty(p.moq_adjustment)} + ${format_qty(p.multiple_adjustment)}`, `<span class="pp-strong">${format_qty(p.suggested_purchase)}</span>`],
+				[__("Suggested Purchase"), `max(0, ceil(${format_qty(p.purchase_need)} − ${format_qty(p.pending_requests || 0)} ${__("pending MR")})) + ${format_qty(p.moq_adjustment)} + ${format_qty(p.multiple_adjustment)}`, `<span class="pp-strong">${format_qty(p.suggested_purchase)}</span>`],
 				[__("Stockout Risk"), __("High: Open SO > Stock or Position < Required − Safety; Medium: Position < Required"), risk_pill(p.stockout_risk)],
 			]);
 		}

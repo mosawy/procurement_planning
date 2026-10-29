@@ -166,6 +166,24 @@ class TestPurchaseOrderBuckets(unittest.TestCase):
 
 
 class TestProposed(unittest.TestCase):
+	def test_pending_requests_subtracted(self):
+		base = proposed()
+		self.assertEqual(base["suggested_purchase"], 270)
+
+		partly = proposed(pending_requests=100)
+		self.assertEqual(partly["suggested_purchase"], 170)
+		self.assertIn("PENDING_MR_SUBTRACTED", partly["warnings"])
+		# not supply yet: the risk is unchanged
+		self.assertEqual(partly["stockout_risk"], base["stockout_risk"])
+
+		covered = proposed(pending_requests=500)
+		self.assertEqual(covered["suggested_purchase"], 0)
+		# MOQ applies only to what is still to be requested
+		self.assertEqual(proposed(pending_requests=500, min_order_qty=50)["suggested_purchase"], 0)
+		self.assertEqual(proposed(pending_requests=250, min_order_qty=50)["suggested_purchase"], 50)
+
+		self.assertNotIn("PENDING_MR_SUBTRACTED", proposed(stock=1000, pending_requests=10)["warnings"])
+
 	def test_formulas(self):
 		# AMS = 730/12; ADS = 2/day; lead 60 + review 30 = 90 day horizon.
 		result = proposed(stock=50, po_buckets={"late": 10, "due": 20, "beyond": 40, "undated": 5})

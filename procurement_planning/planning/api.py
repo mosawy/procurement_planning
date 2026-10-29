@@ -353,6 +353,7 @@ def analyse(settings, include_history=False, use_approved=True):
 			pr_foreign=None,
 		)
 
+		pending_pr_qty = flt((pending_pr.get(item_code) or {}).get("pending_pr_qty"))
 		proposed = calculate_proposed(
 			net_sales=net_sales,
 			eligible_months=len(used_keys),
@@ -370,6 +371,7 @@ def analyse(settings, include_history=False, use_approved=True):
 			order_multiple=flt(item.order_multiple),
 			stockout_months_excluded=len(excluded_keys),
 			all_months_stockout=all_months_stockout,
+			pending_requests=pending_pr_qty,
 			approved=(
 				{
 					"safety_stock": flt(approved.safety_stock),
@@ -424,7 +426,7 @@ def analyse(settings, include_history=False, use_approved=True):
 			next_expected_po_date=min(po_dates) if po_dates else None,
 			horizon_end=horizon_end,
 			po_buckets=po_buckets,
-			pending_pr=flt((pending_pr.get(item_code) or {}).get("pending_pr_qty")),
+			pending_pr=pending_pr_qty,
 			approved_run=approved_run if approved else None,
 			sap=sap,
 			proposed=proposed,

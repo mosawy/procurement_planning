@@ -53,6 +53,9 @@ bench restart
 - Open Sales Orders count as demand only when due within the planning horizon.
 - Back-to-back: Sales Order lines with a Purchase Order raised against them,
   and those Purchase Order lines, are excluded from planning.
+- Submitted Purchase Material Requests not yet ordered (Back-to-Back ones
+  aside) are subtracted from the suggestion, so an item is not requested twice.
+  They are not counted as supply for the stock-out risk.
 - Suggested quantity is raised to the Item Minimum Order Qty and rounded up to
   the Item *Purchase Order Multiple*.
 
