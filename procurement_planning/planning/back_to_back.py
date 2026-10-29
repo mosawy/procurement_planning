@@ -23,6 +23,7 @@ from procurement_planning.planning.b2b_calculations import (
 	EXCESS_TO_STOCK,
 	evaluate_offer,
 	line_gross_profit,
+	offer_lead_time,
 	purchase_order_split,
 	quotation_rate,
 	rank_offers,
@@ -531,6 +532,7 @@ def _make_purchase_order(so, supplier, currency, entries, settings, on_date):
 		customer_qty, excess_qty = purchase_order_split(customer_stock_qty, flt(offer.min_order_qty) * factor)
 		schedule_date = _schedule_date(line, settings, on_date)
 		base = {
+			"expected_delivery_date": _expected_delivery_date(offer, schedule_date, on_date),
 			"item_code": line.item_code,
 			"uom": offer.uom,
 			"conversion_factor": factor,
@@ -566,6 +568,9 @@ def _make_purchase_order(so, supplier, currency, entries, settings, on_date):
 			po.append("items", excess_row)
 
 	po.schedule_date = min(row.schedule_date for row in po.items)
+	if po.meta.has_field("expected_delivery_date"):
+		# not standard in v14; mandatory on the client's Purchase Order
+		po.expected_delivery_date = max(row.expected_delivery_date for row in po.items)
 	po.insert()
 	return po.name
 
@@ -579,6 +584,18 @@ def _schedule_date(line, settings, on_date):
 	else:
 		date = on_date
 	return max(getdate(date), on_date)
+
+
+def _expected_delivery_date(offer, schedule_date, on_date):
+	"""Arrival from the supplier offer: today + its lead time, else the schedule date."""
+	lead_time = offer_lead_time(
+		getdate(offer.transaction_date) if offer.transaction_date else None,
+		cint(offer.lead_time_days),
+		getdate(offer.expected_delivery_date) if offer.expected_delivery_date else None,
+	)
+	if lead_time is None:
+		return schedule_date
+	return add_days(on_date, lead_time)
 
 
 def _ordered_sales_order_items(sales_order):
