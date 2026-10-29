@@ -4,7 +4,8 @@
 """Back-to-back cost per Sales Order line: its Purchase Order lines at actual
 cost where received (Purchase Receipt valuation, which includes Landed Cost
 Vouchers) and estimated cost otherwise, against the estimate the price was
-built on, with the selling rate and margin."""
+built on, with the selling rate and margin. Ordered Qty counts submitted
+Purchase Orders only; draft quantity has its own column."""
 
 import frappe
 from frappe import _
@@ -71,6 +72,8 @@ def get_data(filters):
 					"party": po.supplier_name or po.supplier,
 					"status": _("Draft") if po.docstatus == 0 else _(po.status),
 					"qty": qty,
+					"ordered_qty": qty if po.docstatus == 1 else 0,
+					"draft_qty": qty if po.docstatus == 0 else 0,
 					"received_qty": receipt_qty,
 					"estimated_cost": estimate,
 					"unit_cost": cost,
@@ -78,7 +81,7 @@ def get_data(filters):
 				}
 			)
 
-		ordered_qty, average = weighted_average_cost(parts)
+		_qty, average = weighted_average_cost(parts)
 		estimate = flt(line.estimated_landed_cost) or None
 		selling = flt(line.base_net_rate) / (flt(line.conversion_factor) or 1)
 		variance = average - estimate if average is not None and estimate else None
@@ -94,7 +97,8 @@ def get_data(filters):
 				"status": _(line.sales_order_status),
 				"qty": flt(line.stock_qty),
 				"received_qty": sum(flt(child["received_qty"]) for child in children),
-				"ordered_qty": ordered_qty,
+				"ordered_qty": sum(child["ordered_qty"] for child in children),
+				"draft_qty": sum(child["draft_qty"] for child in children),
 				"estimated_cost": estimate,
 				"unit_cost": average,
 				"cost_basis": _basis([child["cost_basis"] for child in children]),
@@ -133,6 +137,7 @@ def get_columns():
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data", "width": 100},
 		{"fieldname": "qty", "label": _("Qty (Stock UOM)"), "fieldtype": "Float", "width": 110},
 		{"fieldname": "ordered_qty", "label": _("Ordered Qty"), "fieldtype": "Float", "width": 100},
+		{"fieldname": "draft_qty", "label": _("Draft PO Qty"), "fieldtype": "Float", "width": 100},
 		{"fieldname": "received_qty", "label": _("Received Qty"), "fieldtype": "Float", "width": 100},
 		{"fieldname": "estimated_cost", "label": _("Estimated Unit Cost"), "fieldtype": "Currency", "width": 130},
 		{"fieldname": "unit_cost", "label": _("Unit Cost"), "fieldtype": "Currency", "width": 120},
