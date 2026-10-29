@@ -211,3 +211,9 @@ def purchase_line_cost(received_qty, received_value, open_qty, estimated_unit_co
 	else:
 		basis = "Estimated"
 	return cost, basis
+
+
+def line_gross_profit(base_rate, conversion_factor, valuation_rate, stock_qty):
+	"""Gross profit of a selling line in company currency: (rate per stock UOM -
+	valuation rate per stock UOM) x stock qty."""
+	return ((base_rate or 0) / (conversion_factor or 1) - (valuation_rate or 0)) * (stock_qty or 0)

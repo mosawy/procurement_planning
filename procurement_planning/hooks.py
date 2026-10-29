@@ -143,6 +143,9 @@ doc_events = {
 		"validate": "procurement_planning.planning.back_to_back.validate_quotation",
 		"before_submit": "procurement_planning.planning.back_to_back.before_submit_quotation",
 	},
+	"Sales Order": {
+		"validate": "procurement_planning.planning.back_to_back.validate_sales_order",
+	},
 }
 
 # Scheduled Tasks

@@ -14,6 +14,7 @@ from procurement_planning.planning.b2b_calculations import (
 	days_late,
 	estimated_landed_cost,
 	evaluate_offer,
+	line_gross_profit,
 	margin_percent,
 	offer_lead_time,
 	promised_date,
@@ -171,3 +172,11 @@ class TestTracking(unittest.TestCase):
 		self.assertAlmostEqual(cost, 115)
 		self.assertEqual(basis, "Mixed")
 		self.assertEqual(purchase_line_cost(0, 0, 0, 110), (None, "Estimated"))
+
+
+class TestGrossProfit(unittest.TestCase):
+	def test_line_gross_profit(self):
+		# VM case: 10 pieces at 275, landed cost 220 -> 550, not 2,750
+		self.assertAlmostEqual(line_gross_profit(275, 1, 220, 10), 550)
+		# box of 10 sold at 2,750 per box, 2 boxes
+		self.assertAlmostEqual(line_gross_profit(2750, 10, 220, 20), 1100)

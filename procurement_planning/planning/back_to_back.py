@@ -22,6 +22,7 @@ from procurement_planning.planning.b2b_calculations import (
 	EXCESS_CUSTOMER_BEARS,
 	EXCESS_TO_STOCK,
 	evaluate_offer,
+	line_gross_profit,
 	purchase_order_split,
 	quotation_rate,
 	rank_offers,
@@ -384,9 +385,34 @@ def _get_draft_quotation(quotation):
 
 
 def validate_quotation(doc, method=None):
-	"""Keep the sourcing status in line with the lines."""
+	"""Keep the sourcing status in line with the lines; cost sourcing lines."""
 	if doc.meta.has_field("sourcing_status"):
 		doc.sourcing_status = sourcing_status([d.as_dict() for d in doc.items])
+	set_sourcing_valuation(doc)
+
+
+def validate_sales_order(doc, method=None):
+	set_sourcing_valuation(doc)
+
+
+def set_sourcing_valuation(doc):
+	"""Valuation rate and gross profit of sourcing lines from the estimated landed cost.
+
+	ERPNext takes valuation_rate from stock (0 for an item never in stock) and
+	recomputes it on every validate (it is in force_item_fields), then sets
+	gross_profit in SellingController.validate. doc_events validate runs after
+	the controller, so the values set here are the ones saved. Both rates are per
+	stock UOM in company currency.
+	"""
+	for item in doc.items:
+		cost = flt(item.get("estimated_landed_cost"))
+		if not item.get("needs_sourcing") or cost <= 0:
+			continue
+		item.valuation_rate = cost
+		item.gross_profit = flt(
+			line_gross_profit(item.base_rate, item.conversion_factor, cost, item.stock_qty),
+			doc.precision("amount", item),
+		)
 
 
 def before_submit_quotation(doc, method=None):
