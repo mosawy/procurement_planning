@@ -55,13 +55,65 @@ bench restart
 - Suggested quantity is raised to the Item Minimum Order Qty and rounded up to
   the Item *Purchase Order Multiple*.
 
+### Back-to-back purchasing
+
+Buying for a specific customer order, for items not in stock or not stocked at
+all. Built on standard ERPNext documents only.
+
+1. **Quotation** (draft) – set *Required By Date* and *Priority* (Urgent ranks
+   offers by earliest promise, others by cost), tick *Needs Sourcing* on the
+   lines to buy for this order, save, then *Back-to-Back > Request Sourcing*.
+   This makes a draft Purchase Material Request (*Procurement Type*
+   Back-to-Back) whose lines point back to the quotation lines. Lines without a
+   warehouse use the settings *Default Purchase Warehouse*.
+2. **Purchasing** submits the Material Request, makes the *Request for
+   Quotation* from it and records the answers as *Supplier Quotations* (set
+   *Lead Time in days* or *Expected Delivery Date*, *Valid Till*, and *Supplier
+   Min Order Qty* when the supplier sells a minimum). Supplier Quotations made
+   from the RFQ stay linked to the quotation line.
+3. **Supplier Offers** on the Quotation lists, per line, the linked offers plus
+   other valid offers for the item, ranked by priority, with:
+   - unit cost in company currency per stock UOM;
+   - estimated landed cost = unit cost × (1 + landed % + FX buffer % when the
+     offer is in a foreign currency). Landed % is the Supplier's *Landed Cost %*,
+     else the settings default;
+   - the supplier minimum: buy max(need, MOQ); the excess is either priced into
+     the customer's unit cost (*Customer Bears Excess*) or put into stock
+     (*Excess to Stock*);
+   - promised date = today + offer lead time + settings *Delivery Buffer Days*;
+   - expired offers last.
+   *Apply Selection* writes the chosen offer into the line and, with *Set rate
+   from cost and margin*, sets the rate for the margin % (gross margin on the
+   selling price). When every sourcing line has an offer the quotation is
+   *Ready for Pricing*.
+4. **Submit** is blocked while a sourcing line has no offer, and warns when the
+   quotation is valid longer than a supplier offer.
+5. **Sales Order** – made from the Quotation as usual; priority, dates and the
+   sourcing fields are copied. *Back-to-Back > Create Back-to-Back POs* makes
+   one draft Purchase Order per supplier and currency at the offer rate. The
+   customer's quantity is linked to the Sales Order line; a supplier minimum
+   above it goes on a separate unlinked line into stock, so planning treats it
+   as normal stock. Lines already on a Purchase Order are skipped.
+6. **Reports** – *Back-to-Back Order Cost* (per Sales Order line its Purchase
+   Order lines, received quantity at Purchase Receipt valuation which includes
+   Landed Cost Vouchers, the rest at the estimate; margin) and *Back-to-Back
+   Tracker* (stage, expected arrival from Purchase Shipments when installed,
+   days late against the promise).
+
+Planning leaves back-to-back out: Sales Order lines with a Purchase Order line
+against them, those Purchase Order lines, and Back-to-Back Material Requests.
+
+The endpoints use normal document permissions, so sales and purchasing users
+can run them; the two reports are open to Sales and Purchase roles and show
+only Sales Orders the user can read.
+
 ### Tests
 
 The calculation modules are pure Python:
 
 ```bash
 cd apps/procurement_planning
-python3 -m unittest procurement_planning.planning.test_calculations
+python3 -m unittest procurement_planning.planning.test_calculations procurement_planning.planning.test_b2b_calculations
 ```
 
 #### License
