@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:company",
+ "creation": "2026-10-29 12:00:00.000000",
+ "description": "Procurement planning parameters for one company.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "analysis_section",
+  "analysis_months",
+  "safety_stock_days",
+  "review_period_days",
+  "analysis_column",
+  "stockout_day_ratio",
+  "late_po_tolerance_days",
+  "exclude_back_to_back",
+  "lead_time_section",
+  "default_lead_time_days",
+  "lead_time_history_months",
+  "lead_time_min_samples",
+  "lead_time_column",
+  "supplier_history_months",
+  "purchasing_section",
+  "default_purchase_warehouse"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "analysis_section",
+   "fieldtype": "Section Break",
+   "label": "Analysis"
+  },
+  {
+   "default": "12",
+   "description": "Completed months used for the average sales.",
+   "fieldname": "analysis_months",
+   "fieldtype": "Int",
+   "label": "Analysis Months"
+  },
+  {
+   "default": "45",
+   "fieldname": "safety_stock_days",
+   "fieldtype": "Int",
+   "label": "Safety Stock Days"
+  },
+  {
+   "default": "30",
+   "description": "How often purchasing is reviewed. Added to the lead time to give the planning horizon.",
+   "fieldname": "review_period_days",
+   "fieldtype": "Int",
+   "label": "Review Period Days"
+  },
+  {
+   "fieldname": "analysis_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "50",
+   "description": "A month is left out of the average when the item was out of stock on at least this share of its days.",
+   "fieldname": "stockout_day_ratio",
+   "fieldtype": "Percent",
+   "label": "Stock-out Month Threshold"
+  },
+  {
+   "default": "30",
+   "description": "Purchase Orders late by up to this many days still count as supply. Later ones are shown as overdue and not counted. Shipped quantities always count at their arrival date.",
+   "fieldname": "late_po_tolerance_days",
+   "fieldtype": "Int",
+   "label": "Late PO Tolerance Days"
+  },
+  {
+   "default": "1",
+   "description": "Sales Order lines with a Purchase Order raised against them, and those Purchase Order lines, are left out of stock planning.",
+   "fieldname": "exclude_back_to_back",
+   "fieldtype": "Check",
+   "label": "Exclude Back-to-Back Orders"
+  },
+  {
+   "fieldname": "lead_time_section",
+   "fieldtype": "Section Break",
+   "label": "Lead Time and Supplier"
+  },
+  {
+   "default": "0",
+   "description": "Used only when neither the Item nor a Lead Time Profile gives a lead time. 0 means no default: such items are flagged.",
+   "fieldname": "default_lead_time_days",
+   "fieldtype": "Int",
+   "label": "Default Lead Time Days"
+  },
+  {
+   "default": "24",
+   "description": "Purchase Receipts in this window are used to derive lead times.",
+   "fieldname": "lead_time_history_months",
+   "fieldtype": "Int",
+   "label": "Lead Time History Months"
+  },
+  {
+   "default": "3",
+   "description": "A supplier or supplier + brand needs at least this many received Purchase Orders to get a derived lead time.",
+   "fieldname": "lead_time_min_samples",
+   "fieldtype": "Int",
+   "label": "Minimum Purchase Orders per Lead Time"
+  },
+  {
+   "fieldname": "lead_time_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "24",
+   "description": "When an item has no supplier maintained, the supplier of its latest Purchase Order in this window is used.",
+   "fieldname": "supplier_history_months",
+   "fieldtype": "Int",
+   "label": "Supplier History Months"
+  },
+  {
+   "fieldname": "purchasing_section",
+   "fieldtype": "Section Break",
+   "label": "Purchasing"
+  },
+  {
+   "description": "Target warehouse for Material Requests created from the planning screen.",
+   "fieldname": "default_purchase_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Purchase Warehouse",
+   "options": "Warehouse"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Procurement Planning",
+ "name": "Procurement Planning Settings",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "company",
+ "track_changes": 1
+}

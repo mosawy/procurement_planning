@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "from_date",
+  "lead_time_days",
+  "source",
+  "sample_count",
+  "p90_lead_time_days",
+  "reason"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "From Date",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "lead_time_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Lead Time Days",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "Manual",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Source",
+   "options": "Manual\nDerived"
+  },
+  {
+   "columns": 1,
+   "description": "Received Purchase Orders behind a derived value.",
+   "fieldname": "sample_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Purchase Orders",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "description": "9 out of 10 orders arrived within this many days.",
+   "fieldname": "p90_lead_time_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "90th Percentile Days",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Reason"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Procurement Planning",
+ "name": "Lead Time Profile Entry",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

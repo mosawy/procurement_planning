@@ -1,0 +1,191 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "RPR-.YYYY.-.#####",
+ "creation": "2026-10-29 12:00:00.000000",
+ "description": "Monthly calculation and approval of safety stock, reorder level and target stock per item.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "analysis_date",
+  "item_group",
+  "parameters_column",
+  "analysis_months",
+  "safety_stock_days",
+  "review_period_days",
+  "status_section",
+  "status",
+  "is_active",
+  "last_calculated_on",
+  "status_column",
+  "total_items",
+  "changed_items",
+  "overridden_items",
+  "approval_section",
+  "apply_suppliers",
+  "remarks",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "description": "Sales history ends at the month before this date. Use the date of the latest data when working on a copy.",
+   "fieldname": "analysis_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Analysis Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "label": "Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "parameters_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "0 or blank uses the company settings.",
+   "fieldname": "analysis_months",
+   "fieldtype": "Int",
+   "label": "Analysis Months"
+  },
+  {
+   "description": "0 or blank uses the company settings.",
+   "fieldname": "safety_stock_days",
+   "fieldtype": "Int",
+   "label": "Safety Stock Days"
+  },
+  {
+   "description": "0 or blank uses the company settings.",
+   "fieldname": "review_period_days",
+   "fieldtype": "Int",
+   "label": "Review Period Days"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nCalculating\nReady\nApproved\nCancelled",
+   "read_only": 1
+  },
+  {
+   "description": "The approved run the planning screen uses for this company.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_calculated_on",
+   "fieldtype": "Datetime",
+   "label": "Last Calculated On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "status_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_items",
+   "fieldtype": "Int",
+   "label": "Items",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "changed_items",
+   "fieldtype": "Int",
+   "label": "Items Changed vs Previous Run",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "overridden_items",
+   "fieldtype": "Int",
+   "label": "Items Overridden",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "default": "0",
+   "description": "For lines whose supplier came from the latest Purchase Order, set it as the Item's default supplier for this company.",
+   "fieldname": "apply_suppliers",
+   "fieldtype": "Check",
+   "label": "Save Inferred Suppliers to Items on Approval"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Reorder Parameter Run",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Procurement Planning",
+ "name": "Reorder Parameter Run",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,269 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-29 12:00:00.000000",
+ "description": "One item's parameters in a Reorder Parameter Run.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run",
+  "company",
+  "item_code",
+  "item_name",
+  "abc_class",
+  "source_column",
+  "supplier",
+  "supplier_source",
+  "lead_time_days",
+  "lead_time_source",
+  "demand_section",
+  "ams",
+  "ads",
+  "demand_column",
+  "months_used",
+  "stockout_months",
+  "calculated_section",
+  "calculated_safety_stock",
+  "calculated_reorder_level",
+  "calculated_target_stock",
+  "previous_column",
+  "previous_reorder_level",
+  "previous_target_stock",
+  "change_percent",
+  "approved_section",
+  "safety_stock",
+  "reorder_level",
+  "target_stock",
+  "approved_column",
+  "is_overridden",
+  "override_reason",
+  "warnings"
+ ],
+ "fields": [
+  {
+   "fieldname": "run",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Run",
+   "options": "Reorder Parameter Run",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item",
+   "options": "Item",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "abc_class",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "ABC",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "supplier_source",
+   "fieldtype": "Data",
+   "label": "Supplier Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lead_time_days",
+   "fieldtype": "Int",
+   "label": "Lead Time Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lead_time_source",
+   "fieldtype": "Data",
+   "label": "Lead Time Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "demand_section",
+   "fieldtype": "Section Break",
+   "label": "Demand"
+  },
+  {
+   "fieldname": "ams",
+   "fieldtype": "Float",
+   "label": "Average Monthly Sales",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ads",
+   "fieldtype": "Float",
+   "label": "Average Daily Sales",
+   "precision": "4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "demand_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "months_used",
+   "fieldtype": "Int",
+   "label": "Months Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stockout_months",
+   "fieldtype": "Int",
+   "label": "Stock-out Months Left Out",
+   "read_only": 1
+  },
+  {
+   "fieldname": "calculated_section",
+   "fieldtype": "Section Break",
+   "label": "Calculated"
+  },
+  {
+   "fieldname": "calculated_safety_stock",
+   "fieldtype": "Float",
+   "label": "Calculated Safety Stock",
+   "read_only": 1
+  },
+  {
+   "fieldname": "calculated_reorder_level",
+   "fieldtype": "Float",
+   "label": "Calculated Reorder Level",
+   "read_only": 1
+  },
+  {
+   "fieldname": "calculated_target_stock",
+   "fieldtype": "Float",
+   "label": "Calculated Target Stock",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "previous_reorder_level",
+   "fieldtype": "Float",
+   "label": "Previous Reorder Level",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_target_stock",
+   "fieldtype": "Float",
+   "label": "Previous Target Stock",
+   "read_only": 1
+  },
+  {
+   "fieldname": "change_percent",
+   "fieldtype": "Percent",
+   "label": "Reorder Level Change",
+   "read_only": 1
+  },
+  {
+   "description": "Defaults to the calculated values. Change a value only with a reason.",
+   "fieldname": "approved_section",
+   "fieldtype": "Section Break",
+   "label": "Approved"
+  },
+  {
+   "fieldname": "safety_stock",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Safety Stock"
+  },
+  {
+   "fieldname": "reorder_level",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reorder Level"
+  },
+  {
+   "fieldname": "target_stock",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Target Stock"
+  },
+  {
+   "fieldname": "approved_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_overridden",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Overridden",
+   "read_only": 1
+  },
+  {
+   "fieldname": "override_reason",
+   "fieldtype": "Small Text",
+   "label": "Override Reason"
+  },
+  {
+   "fieldname": "warnings",
+   "fieldtype": "Small Text",
+   "label": "Warnings",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Procurement Planning",
+ "name": "Reorder Parameter Line",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "item_code,item_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "item_code",
+ "track_changes": 0
+}
