@@ -13,6 +13,7 @@ NON_NEGATIVE_FIELDS = (
 	"default_lead_time_days",
 	"lead_time_history_months",
 	"supplier_history_months",
+	"delivery_buffer_days",
 )
 
 
@@ -30,6 +31,12 @@ class ProcurementPlanningSettings(Document):
 
 		if not 0 < flt(self.stockout_day_ratio) <= 100:
 			frappe.throw(_("Stock-out Month Threshold must be above 0% and at most 100%"))
+
+		for fieldname in ("default_landed_cost_percent", "fx_buffer_percent"):
+			if flt(self.get(fieldname)) < 0:
+				frappe.throw(_("{0} cannot be negative").format(_(self.meta.get_label(fieldname))))
+		if not 0 <= flt(self.default_margin_percent) < 100:
+			frappe.throw(_("Default Margin % must be from 0 up to below 100"))
 
 		if self.default_purchase_warehouse:
 			warehouse = frappe.db.get_value(

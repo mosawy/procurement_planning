@@ -23,7 +23,13 @@
   "lead_time_column",
   "supplier_history_months",
   "purchasing_section",
-  "default_purchase_warehouse"
+  "default_purchase_warehouse",
+  "back_to_back_section",
+  "default_landed_cost_percent",
+  "fx_buffer_percent",
+  "back_to_back_column",
+  "delivery_buffer_days",
+  "default_margin_percent"
  ],
  "fields": [
   {
@@ -133,6 +139,43 @@
    "fieldtype": "Link",
    "label": "Default Purchase Warehouse",
    "options": "Warehouse"
+  },
+  {
+   "fieldname": "back_to_back_section",
+   "fieldtype": "Section Break",
+   "label": "Back-to-Back Sourcing"
+  },
+  {
+   "default": "10",
+   "description": "Freight, customs and clearance added on top of the supplier price, as a percentage. A Supplier can override it.",
+   "fieldname": "default_landed_cost_percent",
+   "fieldtype": "Percent",
+   "label": "Default Landed Cost %"
+  },
+  {
+   "default": "2",
+   "description": "Added for offers in a foreign currency, to cover exchange rate movement until payment.",
+   "fieldname": "fx_buffer_percent",
+   "fieldtype": "Percent",
+   "label": "Exchange Rate Buffer %"
+  },
+  {
+   "fieldname": "back_to_back_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "7",
+   "description": "Added to the supplier lead time for receipt, inspection and delivery before promising a date to the customer.",
+   "fieldname": "delivery_buffer_days",
+   "fieldtype": "Int",
+   "label": "Delivery Buffer Days"
+  },
+  {
+   "default": "20",
+   "description": "Gross margin proposed when pricing a back-to-back quotation line. The sales user can change it.",
+   "fieldname": "default_margin_percent",
+   "fieldtype": "Percent",
+   "label": "Default Margin %"
   }
  ],
  "index_web_pages_for_search": 0,

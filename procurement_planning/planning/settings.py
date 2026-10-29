@@ -24,6 +24,10 @@ DEFAULTS = {
 	"lead_time_min_samples": DEFAULT_MIN_SAMPLES,
 	"supplier_history_months": 24,
 	"default_purchase_warehouse": None,
+	"default_landed_cost_percent": 10,
+	"fx_buffer_percent": 2,
+	"delivery_buffer_days": 7,
+	"default_margin_percent": 20,
 }
 
 INT_FIELDS = (
@@ -36,7 +40,10 @@ INT_FIELDS = (
 	"lead_time_history_months",
 	"lead_time_min_samples",
 	"supplier_history_months",
+	"delivery_buffer_days",
 )
+
+FLOAT_FIELDS = ("stockout_day_ratio", "default_landed_cost_percent", "fx_buffer_percent", "default_margin_percent")
 
 
 def get_company_settings(company):
@@ -54,5 +61,6 @@ def get_company_settings(company):
 
 	for key in INT_FIELDS:
 		values[key] = cint(values[key])
-	values.stockout_day_ratio = flt(values.stockout_day_ratio)
+	for key in FLOAT_FIELDS:
+		values[key] = flt(values[key])
 	return values
