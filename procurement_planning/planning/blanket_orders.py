@@ -21,17 +21,24 @@ def link_purchase_order(doc, method=None):
 	submitted. Saved lines are left as the user set them, so unticking a line
 	sticks. A line that needs more than what is left on the agreement (plus
 	the Buying Settings allowance) is not linked, and the user is told.
+
+	ERPNext draws an agreement down by every submitted line whose blanket_order
+	is set, ticked or not (BlanketOrder.update_ordered_qty), so a line that is
+	not Against Blanket Order has its blanket_order cleared.
+
+	Runs on drafts, and on an order submitted without being saved first; a
+	saved draft being submitted keeps what its last save decided.
 	"""
-	if doc.docstatus != 0 or not doc.supplier:
+	if not doc.supplier or doc.docstatus == 2 or (doc.docstatus == 1 and not doc.is_new()):
 		return
 
-	order_is_new = doc.is_new()
+	for row in doc.items:
+		if row.blanket_order and not row.against_blanket_order and not _is_new_line(doc, row):
+			row.blanket_order = None
+			row.blanket_order_rate = 0
+
 	new_lines = [
-		row
-		for row in doc.items
-		if row.item_code
-		and not row.against_blanket_order
-		and (order_is_new or row.get("__islocal") or not row.name)
+		row for row in doc.items if row.item_code and not row.against_blanket_order and _is_new_line(doc, row)
 	]
 	if not new_lines:
 		return
@@ -62,7 +69,7 @@ def link_purchase_order(doc, method=None):
 	for row in doc.items:
 		if row.blanket_order and row.against_blanket_order:
 			key = (row.blanket_order, row.item_code)
-			taken[key] = taken.get(key, 0) + _stock_qty(row)
+			taken[key] = taken.get(key, 0) + _agreement_qty(row)
 
 	linked, too_large, other_price = [], [], []
 	for row in new_lines:
@@ -79,7 +86,7 @@ def link_purchase_order(doc, method=None):
 			row.blanket_order_rate = 0
 			continue
 
-		qty = _stock_qty(row)
+		qty = _agreement_qty(row)
 		if qty > agreement["remaining"] * (1 + allowance) + 1e-9:
 			row.blanket_order = None
 			row.blanket_order_rate = 0
@@ -118,5 +125,18 @@ def link_purchase_order(doc, method=None):
 		frappe.msgprint("<br><br>".join(messages), title=_("Blanket Orders"), indicator="blue")
 
 
-def _stock_qty(row):
-	return flt(row.stock_qty) or flt(row.qty) * (flt(row.conversion_factor) or 1)
+def _is_new_line(doc, row):
+	"""Line not saved yet. Frappe keeps __islocal on a new row until it is
+	written, also after naming it before validate (browser save, server insert,
+	rows appended to a saved order)."""
+	return bool(doc.is_new() or row.get("__islocal") or not row.name)
+
+
+def _agreement_qty(row):
+	"""Quantity a line takes from an agreement, as both ERPNext checks see it:
+	the draw-down counts stock_qty, validate_against_blanket_order compares qty
+	(order UOM) with the stock UOM quantity left. Taking the larger keeps a
+	linked line from being rejected later when the order UOM is smaller than the
+	stock UOM (conversion factor below 1)."""
+	stock_qty = flt(row.stock_qty) or flt(row.qty) * (flt(row.conversion_factor) or 1)
+	return max(stock_qty, flt(row.qty))
