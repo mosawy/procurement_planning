@@ -178,6 +178,12 @@ Order `validate` hook `planning.blanket_orders.link_purchase_order` ticks Agains
 new lines for the PO supplier (respects Buying Settings allowance, clears an MR agreement of
 another supplier), so ERPNext's `ordered_qty` on the agreement goes down on submit.
 Parameter lines can no longer be added by hand (`in_create`).
+Review 2026-10-30 (checked against v14 source): the hook sizes a line by max(stock_qty, qty)
+because ERPNext draws down by stock_qty but `validate_against_blanket_order` compares qty;
+it clears `blanket_order` on lines not Against Blanket Order (ERPNext counts any submitted line
+with `blanket_order` set); new-line detection relies on `__islocal`, which Frappe keeps until
+the row is written. Open question: back-to-back PO lines (sales_order set) are linked to the
+supplier's agreement too; the user decides whether to skip them.
 
 Next: user re-tests on the VM (`bench migrate` for the new run field and JSON changes,
 `bench build --app procurement_planning`, `bench restart`).
