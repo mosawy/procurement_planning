@@ -20,9 +20,9 @@ from procurement_planning.planning.lead_time import (
 	SUPPLIER_ITEM_DEFAULT,
 	SUPPLIER_LAST_PO,
 	effective_entry,
+	pick_blanket_order,
 	pick_history_supplier,
 	resolve_lead_time,
-	pick_blanket_order,
 	resolve_supplier,
 	summarise_lead_times,
 )
