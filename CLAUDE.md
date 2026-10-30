@@ -161,7 +161,9 @@ Notes on the fixes:
   fix keep the old gross profit until saved again (submitted ones stay as they are).
 - Fix 4: the header date is the latest line date.
 - Phase 1 fix 2: the deduction applies to submitted, not-ordered Purchase MRs except
-  Back-to-Back ones; draft MRs are not deducted.
+  Back-to-Back ones; draft MRs are not deducted. Only MRs dated within settings
+  `pending_mr_max_age_days` (default 90, 0 = no limit) of the analysis date count: on the
+  test site 64 of 77 open Purchase MRs are from 2023-2024 and never closed.
 - Phase 1 fix 4: field `calculation_queued_on` on Reorder Parameter Run; Calculate Now
   limited to 3,000 items (`parameter_run.INLINE_ITEM_LIMIT`).
 

@@ -22,6 +22,7 @@ DEFAULTS = {
 	"default_lead_time_days": 0,
 	"lead_time_history_months": 24,
 	"lead_time_min_samples": DEFAULT_MIN_SAMPLES,
+	"pending_mr_max_age_days": 90,
 	"supplier_history_months": 24,
 	"default_purchase_warehouse": None,
 	"default_landed_cost_percent": 10,
@@ -39,6 +40,7 @@ INT_FIELDS = (
 	"default_lead_time_days",
 	"lead_time_history_months",
 	"lead_time_min_samples",
+	"pending_mr_max_age_days",
 	"supplier_history_months",
 	"delivery_buffer_days",
 )

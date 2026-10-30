@@ -259,7 +259,7 @@ def analyse(settings, include_history=False, use_approved=True):
 	movements = data_sources.get_stock_movements(params, params.from_date)
 	so_lines = data_sources.get_open_sales_order_lines(params)
 	po_lines = data_sources.get_open_purchase_orders_by_date(params)
-	pending_pr = data_sources.get_pending_purchase_requests(params)
+	pending_pr = data_sources.get_pending_purchase_requests(params, company_settings.pending_mr_max_age_days)
 	supplier_sources = data_sources.get_item_supplier_sources(params, company_settings.supplier_history_months)
 	profile_lead_times = data_sources.get_profile_lead_times(params.company, settings.analysis_date)
 	approved_run, approved_lines = (

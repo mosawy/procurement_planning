@@ -16,6 +16,7 @@
   "stockout_day_ratio",
   "late_po_tolerance_days",
   "exclude_back_to_back",
+  "pending_mr_max_age_days",
   "lead_time_section",
   "default_lead_time_days",
   "lead_time_history_months",
@@ -90,6 +91,13 @@
    "fieldname": "exclude_back_to_back",
    "fieldtype": "Check",
    "label": "Exclude Back-to-Back Orders"
+  },
+  {
+   "default": "90",
+   "description": "Submitted Purchase Material Requests not yet ordered are subtracted from the suggestion only if dated within this many days of the analysis date. 0 means no limit.",
+   "fieldname": "pending_mr_max_age_days",
+   "fieldtype": "Int",
+   "label": "Pending Request Age Limit (Days)"
   },
   {
    "fieldname": "lead_time_section",

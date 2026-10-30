@@ -388,11 +388,19 @@ def _back_to_back_join(link_alias, soi_alias):
 	return f"{link_alias}.sales_order = {soi_alias}.parent and {link_alias}.item_code = {soi_alias}.item_code"
 
 
-def get_pending_purchase_requests(params):
+def get_pending_purchase_requests(params, max_age_days=0):
 	"""Purchase Material Request quantity not yet converted into a Purchase Order.
 
-	Material Request Item.ordered_qty is maintained in stock UOM.
+	Material Request Item.ordered_qty is maintained in stock UOM. max_age_days > 0
+	leaves out requests dated more than that many days before the analysis date:
+	old requests that were never closed are not live demand on purchasing.
 	"""
+	age_filter = ""
+	values = dict(params)
+	if cint(max_age_days) > 0:
+		age_filter = "and mr.transaction_date >= %(pending_mr_from)s"
+		values["pending_mr_from"] = add_days(params.get("analysis_date") or today(), -cint(max_age_days))
+
 	rows = frappe.db.sql(
 		f"""
 		select mri.item_code, sum(mri.stock_qty - mri.ordered_qty) as pending_pr_qty
@@ -405,10 +413,11 @@ def get_pending_purchase_requests(params):
 			and ifnull(mr.procurement_type, '') != 'Back-to-Back'
 			and mr.status not in ('Stopped', 'Closed')
 			and mri.stock_qty > mri.ordered_qty
+			{age_filter}
 			and {_item_conditions(params)}
 		group by mri.item_code
 		""",
-		params,
+		values,
 		as_dict=True,
 	)
 	return {row.item_code: row for row in rows}

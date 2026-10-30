@@ -13,6 +13,7 @@ NON_NEGATIVE_FIELDS = (
 	"default_lead_time_days",
 	"lead_time_history_months",
 	"supplier_history_months",
+	"pending_mr_max_age_days",
 	"delivery_buffer_days",
 )
 
