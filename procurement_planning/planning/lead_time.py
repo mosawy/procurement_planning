@@ -18,6 +18,7 @@ SOURCE_DEFAULT = "Default"
 SUPPLIER_ITEM_DEFAULT = "Item Default"
 SUPPLIER_ITEM_SUPPLIER = "Item Supplier"
 SUPPLIER_LAST_PO = "Last PO"
+SUPPLIER_BLANKET_ORDER = "Blanket Order"
 
 
 def percentile(values, share):
@@ -103,6 +104,19 @@ def resolve_lead_time(item_lead_time, supplier, brand, profile_lead_times, defau
 	return None, None, None
 
 
+def pick_blanket_order(candidates):
+	"""The agreement to buy an item under, from its active agreements.
+
+	candidates: dicts with "remaining" (quantity left to order) and "to_date".
+	Agreements with nothing left are ignored; of the rest, the one that ends
+	first is used up first. None when no agreement has quantity left.
+	"""
+	open_orders = [c for c in candidates if (c.get("remaining") or 0) > 1e-9]
+	if not open_orders:
+		return None
+	return min(open_orders, key=lambda c: (c.get("to_date") or date.max, c.get("blanket_order") or ""))
+
+
 def pick_history_supplier(candidates):
 	"""Supplier bought from most in the history window.
 
@@ -117,8 +131,11 @@ def pick_history_supplier(candidates):
 	return best[1] if best else None
 
 
-def resolve_supplier(item_default_supplier, item_supplier, last_po_supplier):
-	"""(supplier, source) from maintained data first, then purchase history."""
+def resolve_supplier(item_default_supplier, item_supplier, last_po_supplier, blanket_order_supplier=None):
+	"""(supplier, source): an active purchasing agreement first, then maintained
+	data, then purchase history."""
+	if blanket_order_supplier:
+		return blanket_order_supplier, SUPPLIER_BLANKET_ORDER
 	if item_default_supplier:
 		return item_default_supplier, SUPPLIER_ITEM_DEFAULT
 	if item_supplier:

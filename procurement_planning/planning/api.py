@@ -20,7 +20,12 @@ from procurement_planning.planning.demand_history import (
 	select_demand_months,
 	stockout_months,
 )
-from procurement_planning.planning.lead_time import resolve_lead_time, resolve_supplier
+from procurement_planning.planning.lead_time import (
+	SUPPLIER_BLANKET_ORDER,
+	pick_blanket_order,
+	resolve_lead_time,
+	resolve_supplier,
+)
 from procurement_planning.planning.proposed_calculations import (
 	FALLBACK_LEAD_TIME_DAYS,
 	MISSING_DATA_WARNINGS,
@@ -152,6 +157,9 @@ def create_material_request(company, items, warehouse=None):
 
 	run, _lines = data_sources.get_approved_parameters(company)
 	transaction_date = getdate(today())
+	agreements = data_sources.get_active_blanket_orders(
+		company, transaction_date, item_codes=[frappe._dict(row).item_code for row in items]
+	)
 
 	request = frappe.new_doc("Material Request")
 	request.update(
@@ -202,6 +210,7 @@ def create_material_request(company, items, warehouse=None):
 				"suggested_qty": suggested,
 				"variance_reason": row.variance_reason if differs else None,
 				"suggested_supplier": row.supplier or None,
+				"blanket_order": _agreement_for(agreements.get(row.item_code), row.supplier),
 			},
 		)
 
@@ -210,6 +219,14 @@ def create_material_request(company, items, warehouse=None):
 
 	request.insert()
 	return request.name
+
+
+def _agreement_for(candidates, supplier):
+	"""Name of the agreement an item is requested under from supplier, if any."""
+	if not supplier:
+		return None
+	picked = pick_blanket_order([c for c in candidates or [] if c["supplier"] == supplier])
+	return picked["blanket_order"] if picked else None
 
 
 def get_settings(
@@ -261,6 +278,7 @@ def analyse(settings, include_history=False, use_approved=True):
 	po_lines = data_sources.get_open_purchase_orders_by_date(params)
 	pending_pr = data_sources.get_pending_purchase_requests(params, company_settings.pending_mr_max_age_days)
 	supplier_sources = data_sources.get_item_supplier_sources(params, company_settings.supplier_history_months)
+	blanket_orders = data_sources.get_item_blanket_orders(params.company, settings.analysis_date)
 	profile_lead_times = data_sources.get_profile_lead_times(params.company, settings.analysis_date)
 	approved_run, approved_lines = (
 		data_sources.get_approved_parameters(params.company) if use_approved else (None, {})
@@ -295,10 +313,20 @@ def analyse(settings, include_history=False, use_approved=True):
 		# Supplier and lead time.
 		approved = approved_lines.get(item_code)
 		sources = supplier_sources.get(item_code) or {}
+		blanket_order = blanket_orders.get(item_code)
 		supplier, supplier_source = resolve_supplier(
-			sources.get("item_default"), sources.get("item_supplier"), sources.get("last_po")
+			sources.get("item_default"),
+			sources.get("item_supplier"),
+			sources.get("last_po"),
+			blanket_order["supplier"] if blanket_order else None,
 		)
-		if approved and approved.supplier:
+		if (
+			approved
+			and approved.supplier
+			and not blanket_order
+			# An agreement that has since run out or expired no longer decides the supplier.
+			and approved.supplier_source != SUPPLIER_BLANKET_ORDER
+		):
 			# Keep where the run's supplier came from: approving a run does not verify an inferred supplier.
 			supplier, supplier_source = approved.supplier, approved.supplier_source or SUPPLIER_APPROVED_RUN
 
@@ -386,8 +414,14 @@ def analyse(settings, include_history=False, use_approved=True):
 			proposed["warnings"].append("NO_SUPPLIER")
 		elif supplier_source == "Last PO":
 			proposed["warnings"].append("SUPPLIER_INFERRED")
+		if blanket_order:
+			proposed["warnings"].append("BLANKET_ORDER")
+			if proposed["suggested_purchase"] > blanket_order["remaining"] + 1e-9:
+				proposed["warnings"].append("BLANKET_ORDER_EXCEEDED")
 
 		last_purchase_rate = flt(item.last_purchase_rate)
+		# Value the suggestion at the agreed price when there is one.
+		purchase_rate = blanket_order["rate"] if blanket_order and blanket_order["rate"] else last_purchase_rate
 		result = frappe._dict(
 			item_code=item_code,
 			item_name=item.item_name,
@@ -406,7 +440,11 @@ def analyse(settings, include_history=False, use_approved=True):
 			order_multiple=flt(item.order_multiple),
 			item_safety_stock=flt(item.safety_stock),
 			last_purchase_rate=last_purchase_rate,
-			suggested_value=proposed["suggested_purchase"] * last_purchase_rate,
+			blanket_order=blanket_order["blanket_order"] if blanket_order else None,
+			blanket_order_rate=blanket_order["rate"] if blanket_order else 0,
+			blanket_order_remaining=blanket_order["remaining"] if blanket_order else 0,
+			blanket_order_to_date=blanket_order["to_date"] if blanket_order else None,
+			suggested_value=proposed["suggested_purchase"] * purchase_rate,
 			current_stock=current_stock,
 			reservation_stock=flt(item_stock.get("reservation_stock")),
 			transit_stock=flt(item_stock.get("transit_stock")),
@@ -495,6 +533,8 @@ def _table_row(result):
 		"abc_class": result.abc_class,
 		"supplier": result.supplier,
 		"supplier_source": result.supplier_source,
+		"blanket_order": result.blanket_order,
+		"blanket_order_remaining": result.blanket_order_remaining,
 		"lead_time_days": result.lead_time_days,
 		"lead_time_source": result.lead_time_source,
 		"current_stock": result.current_stock,

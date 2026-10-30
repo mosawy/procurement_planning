@@ -146,6 +146,9 @@ doc_events = {
 	"Sales Order": {
 		"validate": "procurement_planning.planning.back_to_back.validate_sales_order",
 	},
+	"Purchase Order": {
+		"validate": "procurement_planning.planning.blanket_orders.link_purchase_order",
+	},
 }
 
 # Scheduled Tasks

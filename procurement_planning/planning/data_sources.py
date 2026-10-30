@@ -12,7 +12,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, get_first_day, get_last_day, getdate, today
 
-from procurement_planning.planning.lead_time import pick_history_supplier
+from procurement_planning.planning.lead_time import pick_blanket_order, pick_history_supplier
 
 # Standard Warehouse Type created by ERPNext (setup install_fixtures).
 TRANSIT_WAREHOUSE_TYPE = "Transit"
@@ -521,6 +521,64 @@ def get_item_supplier_sources(params, history_months):
 	for item_code, item_candidates in candidates.items():
 		result.setdefault(item_code, {})["last_po"] = pick_history_supplier(item_candidates)
 
+	return result
+
+
+def get_active_blanket_orders(company, on_date, supplier=None, item_codes=None):
+	"""{item_code: [agreement]} of submitted Purchasing Blanket Orders of the
+	company valid on on_date. Each agreement: blanket_order, supplier, rate,
+	qty, ordered_qty, remaining (stock UOM; ordered = submitted POs linked to
+	it, as ERPNext keeps it), to_date."""
+	conditions = [
+		"bo.blanket_order_type = 'Purchasing'",
+		"bo.docstatus = 1",
+		"bo.company = %(company)s",
+		"%(on_date)s between bo.from_date and bo.to_date",
+	]
+	values = dict(company=company, on_date=getdate(on_date))
+	if supplier:
+		conditions.append("bo.supplier = %(supplier)s")
+		values["supplier"] = supplier
+	if item_codes is not None:
+		if not item_codes:
+			return {}
+		conditions.append("boi.item_code in %(item_codes)s")
+		values["item_codes"] = tuple(item_codes)
+
+	rows = frappe.db.sql(
+		f"""
+		select boi.item_code, bo.name as blanket_order, bo.supplier, bo.to_date,
+			boi.rate, boi.qty, ifnull(boi.ordered_qty, 0) as ordered_qty
+		from `tabBlanket Order` bo
+		inner join `tabBlanket Order Item` boi on boi.parent = bo.name and boi.parenttype = 'Blanket Order'
+		where {" and ".join(conditions)}
+		""",
+		values,
+		as_dict=True,
+	)
+	result = {}
+	for row in rows:
+		result.setdefault(row.item_code, []).append(
+			dict(
+				blanket_order=row.blanket_order,
+				supplier=row.supplier,
+				to_date=getdate(row.to_date),
+				rate=flt(row.rate),
+				qty=flt(row.qty),
+				ordered_qty=flt(row.ordered_qty),
+				remaining=flt(row.qty) - flt(row.ordered_qty),
+			)
+		)
+	return result
+
+
+def get_item_blanket_orders(company, on_date):
+	"""{item_code: agreement} the item is bought under on on_date (see lead_time.pick_blanket_order)."""
+	result = {}
+	for item_code, candidates in get_active_blanket_orders(company, on_date).items():
+		picked = pick_blanket_order(candidates)
+		if picked:
+			result[item_code] = picked
 	return result
 
 

@@ -167,6 +167,18 @@ Notes on the fixes:
 - Phase 1 fix 4: field `calculation_queued_on` on Reorder Parameter Run; Calculate Now
   limited to 3,000 items (`parameter_run.INLINE_ITEM_LIMIT`).
 
+Blanket Orders (2026-10-30, not yet tested on the VM): the purchasing manager creates and
+submits Purchasing Blanket Orders by hand (the run's Create Annual Plan button is removed;
+`annual_plan.create_annual_plan` stays unused). A submitted agreement valid on the analysis
+date with quantity left is the FIRST supplier source (`lead_time.SUPPLIER_BLANKET_ORDER`,
+`data_sources.get_item_blanket_orders`; if several, the one ending first). The planning screen
+shows the agreement and what is left, values the suggestion at the agreed rate, and warns
+`BLANKET_ORDER_EXCEEDED`. Material Request Item custom field `blanket_order` records it. Purchase
+Order `validate` hook `planning.blanket_orders.link_purchase_order` ticks Against Blanket Order on
+new lines for the PO supplier (respects Buying Settings allowance, clears an MR agreement of
+another supplier), so ERPNext's `ordered_qty` on the agreement goes down on submit.
+Parameter lines can no longer be added by hand (`in_create`).
+
 Next: user re-tests on the VM (`bench migrate` for the new run field and JSON changes,
 `bench build --app procurement_planning`, `bench restart`).
 

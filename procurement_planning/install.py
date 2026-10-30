@@ -261,6 +261,15 @@ CUSTOM_FIELDS = {
 			"insert_after": "variance_reason",
 		},
 		{
+			"fieldname": "blanket_order",
+			"label": "Blanket Order",
+			"fieldtype": "Link",
+			"options": "Blanket Order",
+			"insert_after": "suggested_supplier",
+			"read_only": 1,
+			"description": "Purchasing agreement the item is requested under. The Purchase Order line is linked to it.",
+		},
+		{
 			"fieldname": "sales_quotation",
 			"label": "Sales Quotation",
 			"fieldtype": "Link",

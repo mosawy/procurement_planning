@@ -43,6 +43,8 @@ WARNING_LABELS = {
 	"APPROVED_PARAMETERS": "Safety stock, reorder level and target stock come from the approved parameter run",
 	"NO_SUPPLIER": "No supplier found for the item",
 	"SUPPLIER_INFERRED": "Supplier inferred from Purchase Order history, not maintained on the item",
+	"BLANKET_ORDER": "Supplier and price come from an active purchasing agreement (Blanket Order)",
+	"BLANKET_ORDER_EXCEEDED": "Suggested quantity is more than what is left on the Blanket Order",
 }
 
 # Warnings that mean planning data is missing rather than informational.

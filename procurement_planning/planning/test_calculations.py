@@ -16,11 +16,13 @@ from procurement_planning.planning.lead_time import (
 	SOURCE_DEFAULT,
 	SOURCE_ITEM,
 	SOURCE_PROFILE,
+	SUPPLIER_BLANKET_ORDER,
 	SUPPLIER_ITEM_DEFAULT,
 	SUPPLIER_LAST_PO,
 	effective_entry,
 	pick_history_supplier,
 	resolve_lead_time,
+	pick_blanket_order,
 	resolve_supplier,
 	summarise_lead_times,
 )
@@ -361,6 +363,20 @@ class TestLeadTime(unittest.TestCase):
 		self.assertEqual(resolve_supplier("A", "B", "C"), ("A", SUPPLIER_ITEM_DEFAULT))
 		self.assertEqual(resolve_supplier(None, None, "C"), ("C", SUPPLIER_LAST_PO))
 		self.assertEqual(resolve_supplier(None, None, None), (None, None))
+
+	def test_blanket_order_supplier_comes_first(self):
+		self.assertEqual(resolve_supplier("A", "B", "C", "BO"), ("BO", SUPPLIER_BLANKET_ORDER))
+		self.assertEqual(resolve_supplier("A", None, None, None), ("A", SUPPLIER_ITEM_DEFAULT))
+
+	def test_pick_blanket_order(self):
+		from datetime import date as d
+
+		first = {"blanket_order": "BO-1", "remaining": 10, "to_date": d(2026, 6, 30)}
+		later = {"blanket_order": "BO-2", "remaining": 50, "to_date": d(2026, 12, 31)}
+		used_up = {"blanket_order": "BO-0", "remaining": 0, "to_date": d(2026, 3, 31)}
+		self.assertEqual(pick_blanket_order([later, used_up, first])["blanket_order"], "BO-1")
+		self.assertIsNone(pick_blanket_order([used_up]))
+		self.assertIsNone(pick_blanket_order([]))
 
 	def test_history_supplier_by_quantity(self):
 		# a local supplier bought from recently but little loses to the main source

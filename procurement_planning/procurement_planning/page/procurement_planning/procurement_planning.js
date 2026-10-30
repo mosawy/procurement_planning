@@ -481,7 +481,11 @@
 			const other_warnings = row.warnings.length - shown;
 			const supplier = row.supplier ? frappe.utils.escape_html(row.supplier) : "";
 			const supplier_note =
-				row.supplier_source === "Last PO" ? `<div class="pp-item-name">${__("from PO history")}</div>` : "";
+				row.supplier_source === "Last PO"
+					? `<div class="pp-item-name">${__("from PO history")}</div>`
+					: row.blanket_order
+					? `<div class="pp-item-name">${frappe.utils.escape_html(row.blanket_order)} · ${__("{0} left", [format_qty(row.blanket_order_remaining)])}</div>`
+					: "";
 			const warning_title = frappe.utils.escape_html(
 				row.warnings.map((w) => this.data.warning_labels[w] || w).join("\n")
 			);
@@ -603,6 +607,7 @@
 				${stat(__("Net Sales (months used)"), item.net_sales, __("{0} months used of {1} · {2} stock-out months left out", [item.eligible_months, this.settings.analysis_months, (item.stockout_months || []).length]))}
 				${stat(__("Net Sales (fixed 12 months)"), item.net_sales_12m, __("{0} months with sales", [item.months_with_sales]))}
 				${stat(__("Supplier"), null, item.supplier ? `${item.supplier} (${__(item.supplier_source)})` : __("Not found"), true)}
+				${item.blanket_order ? stat(__("Blanket Order"), item.blanket_order_remaining, __("{0} · left to order · agreed rate {1} · valid to {2}", [item.blanket_order, format_money(item.blanket_order_rate, this.settings.currency), format_date(item.blanket_order_to_date)])) : ""}
 				${stat(__("Lead Time"), null, item.lead_time_days ? __("{0} days · {1}", [item.lead_time_days, lead_time_label(item)]) : __("Not available"), true)}
 				${stat(__("Minimum Order Qty"), item.min_order_qty, item.order_multiple ? __("Order multiple {0}", [format_qty(item.order_multiple)]) : "")}
 				${stat(__("Last Purchase Rate"), null, item.last_purchase_rate ? format_money(item.last_purchase_rate, this.settings.currency) : __("Not available"), true)}

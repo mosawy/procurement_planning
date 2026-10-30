@@ -32,7 +32,6 @@ frappe.ui.form.on("Reorder Parameter Run", {
 		}
 
 		if (doc.docstatus === 1) {
-			frm.add_custom_button(__("Create Annual Plan"), () => create_annual_plan(frm));
 			frm.add_custom_button(__("Planning Screen"), () => frappe.set_route("procurement-planning"));
 		}
 
