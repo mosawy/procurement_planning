@@ -17,6 +17,8 @@ PARAMETERS = (
 
 class ReorderParameterLine(Document):
 	def validate(self):
+		if self.is_new() and not (self.run and self.item_code):
+			frappe.throw(_("Reorder Parameter Lines are created by calculating a Reorder Parameter Run"))
 		if not run_is_editable(self.run):
 			frappe.throw(_("Run {0} is approved or cancelled; its lines cannot change").format(self.run))
 
