@@ -549,12 +549,31 @@ def make_sales_order(source_name, target_doc=None):
 	"""Standard Quotation -> Sales Order mapping, without the fields the user may
 	not read (permlevel 1: cost, valuation rate, gross profit). The mapper
 	copies them all and the unsaved order goes to the browser as it is; the
-	saved order takes the cost from the Quotation again (copy_cost_from_quotation)."""
+	saved order takes the cost from the Quotation again (copy_cost_from_quotation).
+	Sourced lines get their promised date as delivery date."""
 	from erpnext.selling.doctype.quotation.quotation import make_sales_order as standard_make_sales_order
 
 	doc = standard_make_sales_order(source_name, target_doc)
 	doc.apply_fieldlevel_read_permissions()
+	set_delivery_dates_from_promise(doc)
 	return doc
+
+
+def set_delivery_dates_from_promise(doc):
+	"""Delivery date of each sourced line = its promised date, header = the latest.
+
+	A promise before the order date is left out: the Sales Order refuses a
+	delivery date before its date, and the user has to agree a new one anyway.
+	"""
+	order_date = getdate(doc.transaction_date or today())
+	dates = []
+	for line in doc.items:
+		if line.get("promised_date") and getdate(line.promised_date) >= order_date:
+			line.delivery_date = getdate(line.promised_date)
+		if line.get("delivery_date"):
+			dates.append(getdate(line.delivery_date))
+	if dates:
+		doc.delivery_date = max(dates)
 
 
 def copy_cost_from_quotation(doc):
@@ -874,7 +893,19 @@ def _make_purchase_order(mr, supplier, currency, entries, settings, on_date):
 		if excess_qty > 1e-9:
 			excess_row = dict(base, **_offer_quantity(offer, excess_qty, line.stock_uom))
 			excess_row["warehouse"] = settings.default_purchase_warehouse or line.warehouse
+			# One PO row per Supplier Quotation Item: ERPNext refuses a second row
+			# on the same one (validate_with_previous_doc). Same rate, header link kept.
+			excess_row.pop("supplier_quotation_item", None)
 			po.append("items", excess_row)
+
+	# Two lines of one quotation for the same item can share an offer: only the
+	# first row keeps the Supplier Quotation Item link.
+	linked = set()
+	for row in po.items:
+		if row.supplier_quotation_item in linked:
+			row.supplier_quotation_item = None
+		elif row.supplier_quotation_item:
+			linked.add(row.supplier_quotation_item)
 
 	po.schedule_date = min(row.schedule_date for row in po.items)
 	if po.meta.has_field("expected_delivery_date"):
