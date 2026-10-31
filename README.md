@@ -95,7 +95,8 @@ gross profit of sales lines are on permlevel 1.
    A quantity above the sourced one blocks (any change when the customer bears
    the supplier minimum); a lower quantity, an expired price or a missing
    promise only warn.
-6. **Sales Order** – made from the quotation as usual; then *Back-to-Back >
+6. **Sales Order** – made from the quotation as usual (sourced lines take
+   their promised date as delivery date); then *Back-to-Back >
    Request Purchase* makes a draft *Material Request* (Back-to-Back) with the
    sourced lines and no customer or price. It goes through the normal approval.
 7. **Purchase Orders** – on the submitted Material Request, *Create >

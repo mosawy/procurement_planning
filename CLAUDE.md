@@ -87,7 +87,8 @@ Flow:
 2. Quotation button Back-to-Back > Request Sourcing (`back_to_back.request_sourcing`): a new
    submittable **Sourcing Request** (purchasing) with only those lines, no customer, no
    selling rate. Created with ignore_permissions after checking Quotation write. Lines on an
-   active (not cancelled) Sourcing Request are skipped. Only made from Quotations (`in_create`).
+   active (not cancelled) Sourcing Request are skipped. Only made from Quotations (`in_create`;
+   items table cannot add or delete rows; validate refuses a line without `quotation_item`).
 3. Sourcing Request > Create > Request for Quotation (`make_request_for_quotation`, mapper);
    RFQ Item and Supplier Quotation Item carry `sourcing_request` / `sourcing_request_item`
    (the standard RFQ -> SQ mapping copies them; the supplier portal path does not).
@@ -112,9 +113,11 @@ Flow:
    current minimum margin in the line's UOM/currency) unless the user has settings
    `below_minimum_rate_role`; warns on a lower qty, an expired or shorter price validity, no
    promised date. Duplicated quotations drop the copied sourcing (`clear_foreign_sourcing`).
-7. Sales Order by the standard mapping; `make_sales_order` is overridden only to drop
-   permlevel 1 fields before the unsaved order goes to the browser; the SO validate hook
-   takes the cost from the Quotation Item on the server (`copy_cost_from_quotation`).
+7. Sales Order by the standard mapping; `make_sales_order` is overridden to drop
+   permlevel 1 fields before the unsaved order goes to the browser and to set each sourced
+   line's `delivery_date` to its `promised_date` (unless before the order date; the header
+   takes the latest, as ERPNext's validate_delivery_date does); the SO validate hook takes the
+   cost from the Quotation Item on the server (`copy_cost_from_quotation`).
 8. Sales Order button Back-to-Back > Request Purchase (`request_purchase`): draft Material
    Request (Purchase, `procurement_type` Back-to-Back) with the sourced lines: stock qty,
    warehouse, schedule date = promise - delivery buffer, standard `sales_order` /
@@ -125,7 +128,10 @@ Flow:
    chosen on the submitted Sourcing Request; customer line linked to MR and SO lines, MOQ
    excess on a separate unlinked line; `expected_delivery_date` on lines and, when the field
    exists, the header; expired offer warns; a qty not whole in the offer UOM goes in stock UOM
-   without the SQ item link. The Blanket Order hook still applies.
+   without the SQ item link. Only one PO row per Supplier Quotation Item carries the link
+   (ERPNext's validate_with_previous_doc refuses duplicates): the excess row and a second
+   line on the same offer keep `supplier_quotation` and the rate only; maintain_same_rate
+   skips rows without the item link. The Blanket Order hook still applies.
 10. Receipt and Delivery Note are standard.
 
 Pricing: landed cost = supplier unit cost in company currency x (1 + supplier
@@ -186,7 +192,11 @@ with `blanket_order` set); new-line detection relies on `__islocal`, which Frapp
 the row is written. Open question: back-to-back PO lines (sales_order set) are linked to the
 supplier's agreement too; the user decides whether to skip them.
 
-Next: user tests the redesigned flow on the VM (see the test script in the README section
+VM test 2026-11-01: steps 1-9 of the README test script passed. Step 10 failed with
+"Duplicate row 3 with same Supplier Quotation Item" (excess row carried the item link);
+fixed, plus SR rows only from the Quotation and SO delivery dates from the promise.
+
+Next: user re-tests step 10 onwards on the VM (see the test script in the README section
 "Back-to-back purchasing"); old back-to-back test data need not be migrated.
 
 ## Phase 3 – later
