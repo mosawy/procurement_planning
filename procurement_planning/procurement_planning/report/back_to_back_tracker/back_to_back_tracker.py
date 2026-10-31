@@ -69,7 +69,7 @@ def get_data(filters):
 				"qty": required_qty,
 				"required_by_date": line.order_required_by_date or line.delivery_date,
 				"promised_date": promised,
-				"suppliers": ", ".join(sorted({po.supplier for po in po_lines})) or line.sourcing_supplier,
+				"suppliers": ", ".join(sorted({po.supplier for po in po_lines})),
 				"purchase_orders": ", ".join(sorted({po.purchase_order for po in po_lines})),
 				"ordered_qty": ordered_qty,
 				"shipped_qty": shipped_qty,

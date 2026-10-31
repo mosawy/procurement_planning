@@ -702,7 +702,7 @@ def get_back_to_back_sales_order_lines(filters):
 			so.status as sales_order_status, soi.item_code, soi.item_name, soi.stock_uom,
 			soi.stock_qty, soi.conversion_factor, soi.delivered_qty, soi.base_net_rate,
 			soi.delivery_date, soi.needs_sourcing, soi.estimated_landed_cost, soi.promised_date,
-			soi.sourcing_supplier, soi.excess_qty, soi.excess_pricing
+			soi.sourcing_request, soi.sourcing_request_item
 		from `tabSales Order Item` soi
 		inner join `tabSales Order` so on so.name = soi.parent
 		where {" and ".join(conditions)}

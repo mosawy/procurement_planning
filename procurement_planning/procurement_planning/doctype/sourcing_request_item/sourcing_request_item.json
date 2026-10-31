@@ -1,0 +1,249 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 11:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "item_name",
+  "description",
+  "quantity_column",
+  "qty",
+  "uom",
+  "conversion_factor",
+  "stock_qty",
+  "stock_uom",
+  "quotation_item",
+  "offer_section",
+  "supplier_quotation",
+  "supplier_quotation_item",
+  "supplier",
+  "supplier_rate",
+  "lead_time_days",
+  "min_order_qty",
+  "valid_till",
+  "offer_column",
+  "purchase_qty",
+  "excess_qty",
+  "excess_pricing",
+  "landed_cost",
+  "pricing_column",
+  "pricing_cost",
+  "suggested_rate",
+  "minimum_rate",
+  "promised_date"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quantity_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "label": "UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "label": "UOM Conversion Factor",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_qty",
+   "fieldtype": "Float",
+   "label": "Qty in Stock UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_uom",
+   "fieldtype": "Link",
+   "label": "Stock UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quotation_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Quotation Item",
+   "no_copy": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "offer_section",
+   "fieldtype": "Section Break",
+   "label": "Chosen Offer"
+  },
+  {
+   "fieldname": "supplier_quotation",
+   "fieldtype": "Link",
+   "label": "Supplier Quotation",
+   "options": "Supplier Quotation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier_quotation_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Supplier Quotation Item",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "description": "Supplier unit cost per stock UOM in company currency.",
+   "fieldname": "supplier_rate",
+   "fieldtype": "Currency",
+   "label": "Supplier Rate",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lead_time_days",
+   "fieldtype": "Int",
+   "label": "Lead Time Days",
+   "read_only": 1
+  },
+  {
+   "description": "In stock UOM.",
+   "fieldname": "min_order_qty",
+   "fieldtype": "Float",
+   "label": "Supplier Min Order Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "valid_till",
+   "fieldtype": "Date",
+   "label": "Offer Valid Till",
+   "read_only": 1
+  },
+  {
+   "fieldname": "offer_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Stock UOM: the larger of the need and the supplier minimum.",
+   "fieldname": "purchase_qty",
+   "fieldtype": "Float",
+   "label": "Purchase Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "excess_qty",
+   "fieldtype": "Float",
+   "label": "Excess Qty",
+   "read_only": 1
+  },
+  {
+   "default": "Excess to Stock",
+   "description": "How a supplier minimum above the need is priced: into stock at cost, or spread over the customer's quantity.",
+   "fieldname": "excess_pricing",
+   "fieldtype": "Select",
+   "label": "Excess Pricing",
+   "options": "Excess to Stock\nCustomer Bears Excess"
+  },
+  {
+   "description": "Per stock UOM: supplier rate plus landed cost % and, in a foreign currency, the FX buffer.",
+   "fieldname": "landed_cost",
+   "fieldtype": "Currency",
+   "label": "Landed Cost",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pricing_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Cost the rates are built on: the landed cost, with the excess spread over the customer's quantity when the customer bears it.",
+   "fieldname": "pricing_cost",
+   "fieldtype": "Currency",
+   "label": "Pricing Cost",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "description": "Per stock UOM in company currency.",
+   "fieldname": "suggested_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Suggested Rate",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "description": "Per stock UOM in company currency.",
+   "fieldname": "minimum_rate",
+   "fieldtype": "Currency",
+   "label": "Minimum Rate",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "promised_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Promised Date",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-31 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Procurement Planning",
+ "name": "Sourcing Request Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

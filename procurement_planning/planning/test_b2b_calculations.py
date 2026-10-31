@@ -151,11 +151,11 @@ class TestOfferEvaluation(unittest.TestCase):
 	def test_sourcing_status(self):
 		self.assertEqual(sourcing_status([{"needs_sourcing": 0}]), "")
 		self.assertEqual(
-			sourcing_status([{"needs_sourcing": 1, "supplier_quotation_item": "x"}, {"needs_sourcing": 0}]),
-			"Ready for Pricing",
+			sourcing_status([{"needs_sourcing": 1, "sourced_stock_qty": 10}, {"needs_sourcing": 0}]),
+			"Ready",
 		)
 		self.assertEqual(
-			sourcing_status([{"needs_sourcing": 1, "supplier_quotation_item": "x"}, {"needs_sourcing": 1}]),
+			sourcing_status([{"needs_sourcing": 1, "sourced_stock_qty": 10}, {"needs_sourcing": 1}]),
 			"Pending Sourcing",
 		)
 

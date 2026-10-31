@@ -1,12 +1,13 @@
 # Copyright (c) 2026, Golive-Solutions and contributors
 # For license information, please see license.txt
 
-"""Custom fields this app adds to standard ERPNext DocTypes.
+"""Custom fields and property setters this app adds to standard ERPNext DocTypes.
 
 Created on install and refreshed on every migrate, so the definitions live in
 code rather than in exported fixtures.
 """
 
+import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 VARIANCE_REASONS = "\n".join(
@@ -24,7 +25,6 @@ VARIANCE_REASONS = "\n".join(
 )
 
 PRIORITIES = "\nUrgent\nNormal\nFlexible"
-EXCESS_PRICING = "\nCustomer Bears Excess\nExcess to Stock"
 
 
 def order_fields(insert_after):
@@ -51,16 +51,20 @@ def order_fields(insert_after):
 
 
 def sourcing_item_fields():
-	"""Back-to-back sourcing fields on Quotation Item and Sales Order Item (same
-	names, so the standard mapping copies them)."""
+	"""Back-to-back fields on Quotation Item and Sales Order Item (same names, so
+	the standard Quotation -> Sales Order mapping copies them).
+
+	Sales sees only what it prices with: suggested and minimum rate, promised
+	date and offer validity. Supplier and offer stay on the Sourcing Request; the
+	cost the price is built on is on permlevel 1.
+	"""
 	return [
 		{
 			"fieldname": "needs_sourcing",
 			"label": "Needs Sourcing",
 			"fieldtype": "Check",
 			"insert_after": "item_name",
-			"in_list_view": 0,
-			"description": "Bought back-to-back for this order from a supplier offer.",
+			"description": "Bought back-to-back for this order: purchasing finds a supplier offer and returns a price.",
 		},
 		{
 			"fieldname": "sourcing_section",
@@ -71,79 +75,109 @@ def sourcing_item_fields():
 			"depends_on": "eval:doc.needs_sourcing",
 		},
 		{
-			"fieldname": "supplier_quotation",
-			"label": "Supplier Quotation",
-			"fieldtype": "Link",
-			"options": "Supplier Quotation",
+			"fieldname": "suggested_rate",
+			"label": "Suggested Rate",
+			"fieldtype": "Currency",
+			"options": "currency",
 			"insert_after": "sourcing_section",
 			"read_only": 1,
+			"description": "Rate for the target margin, per this line's UOM.",
 		},
 		{
-			"fieldname": "supplier_quotation_item",
-			"label": "Supplier Quotation Item",
-			"fieldtype": "Data",
-			"insert_after": "supplier_quotation",
-			"read_only": 1,
-			"hidden": 1,
-		},
-		{
-			"fieldname": "sourcing_supplier",
-			"label": "Sourcing Supplier",
-			"fieldtype": "Link",
-			"options": "Supplier",
-			"insert_after": "supplier_quotation_item",
-			"read_only": 1,
-		},
-		{
-			"fieldname": "estimated_landed_cost",
-			"label": "Estimated Landed Cost",
+			"fieldname": "minimum_rate",
+			"label": "Minimum Rate",
 			"fieldtype": "Currency",
-			"options": "Company:company:default_currency",
-			"insert_after": "sourcing_supplier",
+			"options": "currency",
+			"insert_after": "suggested_rate",
 			"read_only": 1,
-			"description": "Per stock UOM, company currency: supplier cost plus landed cost % and FX buffer.",
+			"description": "Lowest rate that can be submitted without the exception role.",
 		},
 		{
 			"fieldname": "promised_date",
 			"label": "Promised Date",
 			"fieldtype": "Date",
-			"insert_after": "estimated_landed_cost",
-			"description": "Date promised to the customer: offer lead time plus delivery buffer.",
+			"insert_after": "minimum_rate",
+			"read_only": 1,
+			"description": "Date that can be promised to the customer.",
+		},
+		{
+			"fieldname": "quote_valid_till",
+			"label": "Price Valid Till",
+			"fieldtype": "Date",
+			"insert_after": "promised_date",
+			"read_only": 1,
+			"description": "The suggested and minimum rates hold until this date.",
 		},
 		{
 			"fieldname": "sourcing_column",
 			"fieldtype": "Column Break",
-			"insert_after": "promised_date",
+			"insert_after": "quote_valid_till",
 		},
 		{
-			"fieldname": "purchase_qty",
-			"label": "Purchase Qty",
+			"fieldname": "sourced_stock_qty",
+			"label": "Sourced Qty (Stock UOM)",
 			"fieldtype": "Float",
 			"insert_after": "sourcing_column",
 			"read_only": 1,
-			"description": "Stock UOM: the larger of the need and the supplier minimum order.",
+			"description": "Quantity the rates and the promise were worked out for.",
 		},
 		{
-			"fieldname": "excess_qty",
-			"label": "Excess Qty",
-			"fieldtype": "Float",
-			"insert_after": "purchase_qty",
+			"fieldname": "sourced_qty_locked",
+			"label": "Sourced Qty Fixed",
+			"fieldtype": "Check",
+			"insert_after": "sourced_stock_qty",
+			"read_only": 1,
+			"hidden": 1,
+		},
+		{
+			"fieldname": "sourcing_request",
+			"label": "Sourcing Request",
+			"fieldtype": "Link",
+			"options": "Sourcing Request",
+			"insert_after": "sourced_qty_locked",
 			"read_only": 1,
 		},
 		{
-			"fieldname": "excess_pricing",
-			"label": "Excess Pricing",
-			"fieldtype": "Select",
-			"options": EXCESS_PRICING,
-			"insert_after": "excess_qty",
+			"fieldname": "sourcing_request_item",
+			"label": "Sourcing Request Item",
+			"fieldtype": "Data",
+			"insert_after": "sourcing_request",
 			"read_only": 1,
+			"hidden": 1,
 		},
 		{
-			"fieldname": "quote_valid_till",
-			"label": "Supplier Offer Valid Till",
-			"fieldtype": "Date",
-			"insert_after": "excess_pricing",
+			"fieldname": "estimated_landed_cost",
+			"label": "Estimated Cost",
+			"fieldtype": "Currency",
+			"options": "Company:company:default_currency",
+			"insert_after": "sourcing_request_item",
 			"read_only": 1,
+			"permlevel": 1,
+			"description": "Cost per stock UOM in company currency the rates are built on (landed cost; with the supplier minimum spread over this quantity when the customer bears it).",
+		},
+	]
+
+
+def sourcing_link_fields(insert_after):
+	"""Link to the Sourcing Request line, on purchasing documents."""
+	return [
+		{
+			"fieldname": "sourcing_request",
+			"label": "Sourcing Request",
+			"fieldtype": "Link",
+			"options": "Sourcing Request",
+			"insert_after": insert_after,
+			"read_only": 1,
+			"search_index": 1,
+		},
+		{
+			"fieldname": "sourcing_request_item",
+			"label": "Sourcing Request Item",
+			"fieldtype": "Data",
+			"insert_after": "sourcing_request",
+			"read_only": 1,
+			"hidden": 1,
+			"search_index": 1,
 		},
 	]
 
@@ -165,21 +199,12 @@ CUSTOM_FIELDS = {
 			"fieldname": "sourcing_status",
 			"label": "Sourcing Status",
 			"fieldtype": "Select",
-			"options": "\nPending Sourcing\nReady for Pricing",
+			"options": "\nPending Sourcing\nReady",
 			"insert_after": "priority",
 			"read_only": 1,
 			"no_copy": 1,
 			"allow_on_submit": 1,
 			"in_standard_filter": 1,
-		},
-		{
-			"fieldname": "sourcing_request",
-			"label": "Sourcing Request",
-			"fieldtype": "Link",
-			"options": "Material Request",
-			"insert_after": "sourcing_status",
-			"read_only": 1,
-			"no_copy": 1,
 		},
 	],
 	"Quotation Item": sourcing_item_fields(),
@@ -207,6 +232,7 @@ CUSTOM_FIELDS = {
 			"description": "Freight, customs and clearance as % of the purchase cost. Blank uses the planning settings default.",
 		},
 	],
+	"Request for Quotation Item": sourcing_link_fields("material_request_item"),
 	"Supplier Quotation Item": [
 		{
 			"fieldname": "min_order_qty",
@@ -216,7 +242,8 @@ CUSTOM_FIELDS = {
 			"non_negative": 1,
 			"description": "Minimum quantity the supplier sells, in this line's UOM.",
 		},
-	],
+	]
+	+ sourcing_link_fields("material_request_item"),
 	"Material Request": [
 		{
 			"fieldname": "procurement_type",
@@ -236,7 +263,8 @@ CUSTOM_FIELDS = {
 			"read_only": 1,
 		},
 	],
-	"Material Request Item": [
+	"Material Request Item": sourcing_link_fields("sales_order_item")
+	+ [
 		{
 			"fieldname": "suggested_qty",
 			"label": "Suggested Qty",
@@ -269,24 +297,38 @@ CUSTOM_FIELDS = {
 			"read_only": 1,
 			"description": "Purchasing agreement the item is requested under. The Purchase Order line is linked to it.",
 		},
-		{
-			"fieldname": "sales_quotation",
-			"label": "Sales Quotation",
-			"fieldtype": "Link",
-			"options": "Quotation",
-			"insert_after": "sales_order_item",
-			"read_only": 1,
-			"search_index": 1,
-		},
-		{
-			"fieldname": "quotation_item",
-			"label": "Quotation Item",
-			"fieldtype": "Data",
-			"insert_after": "sales_quotation",
-			"read_only": 1,
-			"hidden": 1,
-		},
 	],
+}
+
+
+# Fields of the first back-to-back design (supplier and offer on sales documents,
+# sourcing through a Material Request), removed with their columns on migrate.
+OBSOLETE_FIELDS = {
+	"Quotation": ["sourcing_request"],
+	"Quotation Item": [
+		"supplier_quotation",
+		"supplier_quotation_item",
+		"sourcing_supplier",
+		"purchase_qty",
+		"excess_qty",
+		"excess_pricing",
+	],
+	"Sales Order Item": [
+		"supplier_quotation",
+		"supplier_quotation_item",
+		"sourcing_supplier",
+		"purchase_qty",
+		"excess_qty",
+		"excess_pricing",
+	],
+	"Material Request Item": ["sales_quotation", "quotation_item"],
+}
+
+# Standard fields that reveal the buying cost on sales documents: on permlevel 1,
+# so only roles given level 1 on Quotation / Sales Order see them.
+COST_FIELDS = {
+	"Quotation Item": ["valuation_rate", "gross_profit"],
+	"Sales Order Item": ["valuation_rate", "gross_profit"],
 }
 
 
@@ -299,4 +341,35 @@ def after_migrate():
 
 
 def make_custom_fields():
+	remove_obsolete_fields()
 	create_custom_fields(CUSTOM_FIELDS, update=True)
+	make_property_setters()
+
+
+def remove_obsolete_fields():
+	for doctype, fieldnames in OBSOLETE_FIELDS.items():
+		for fieldname in fieldnames:
+			name = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": fieldname})
+			if name:
+				frappe.delete_doc("Custom Field", name, ignore_permissions=True, force=True)
+			# Deleting a Custom Field keeps its column; drop it so nothing reads stale data.
+			# Never a column of a standard field.
+			standard = frappe.db.exists("DocField", {"parent": doctype, "fieldname": fieldname})
+			if not standard and frappe.db.has_column(doctype, fieldname):
+				frappe.db.sql_ddl(f"alter table `tab{doctype}` drop column `{fieldname}`")
+		frappe.clear_cache(doctype=doctype)
+
+
+def make_property_setters():
+	for doctype, fieldnames in COST_FIELDS.items():
+		for fieldname in fieldnames:
+			frappe.make_property_setter(
+				{
+					"doctype": doctype,
+					"fieldname": fieldname,
+					"property": "permlevel",
+					"value": 1,
+					"property_type": "Int",
+				},
+				validate_fields_for_doctype=False,
+			)

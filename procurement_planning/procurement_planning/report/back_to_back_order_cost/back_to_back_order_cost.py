@@ -39,9 +39,7 @@ def get_data(filters):
 	data = []
 	for line in lines:
 		po_lines = purchases.get(line.name, [])
-		if filters.supplier and filters.supplier not in (
-			{po.supplier for po in po_lines} | {line.sourcing_supplier}
-		):
+		if filters.supplier and filters.supplier not in {po.supplier for po in po_lines}:
 			continue
 
 		children = []

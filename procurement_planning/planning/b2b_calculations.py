@@ -211,12 +211,13 @@ def sourcing_request_status(docstatus, lines_with_offer, total_lines, has_rfq=Fa
 
 
 def sourcing_status(lines):
-	"""Quotation sourcing status from its lines (dicts with needs_sourcing and supplier_quotation_item)."""
+	"""Quotation sourcing status from its lines (dicts with needs_sourcing and
+	sourced_stock_qty, which the submitted Sourcing Request sets)."""
 	sourcing = [line for line in lines if line.get("needs_sourcing")]
 	if not sourcing:
 		return ""
-	if all(line.get("supplier_quotation_item") for line in sourcing):
-		return "Ready for Pricing"
+	if all(line.get("sourced_stock_qty") for line in sourcing):
+		return "Ready"
 	return "Pending Sourcing"
 
 
