@@ -96,6 +96,8 @@
    "label": "Items"
   },
   {
+   "cannot_add_rows": 1,
+   "cannot_delete_rows": 1,
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Items",
@@ -107,7 +109,7 @@
  "index_web_pages_for_search": 0,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-31 12:00:00.000000",
+ "modified": "2026-11-01 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Sourcing Request",

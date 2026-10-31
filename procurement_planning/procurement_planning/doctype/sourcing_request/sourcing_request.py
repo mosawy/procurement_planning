@@ -29,6 +29,14 @@ class SourcingRequest(Document):
 				_("Margin % cannot be below the Minimum Margin % of {0}").format(settings.minimum_margin_percent)
 			)
 
+		manual = [str(d.idx) for d in self.items if not d.quotation_item]
+		if manual:
+			frappe.throw(
+				_("Rows {0} do not come from the Quotation. Lines are added only by Request Sourcing.").format(
+					", ".join(manual)
+				)
+			)
+
 		company_currency = frappe.get_cached_value("Company", self.company, "default_currency")
 		on_date = getdate(today())
 		for line in self.items:
