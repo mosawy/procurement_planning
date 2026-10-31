@@ -416,12 +416,16 @@ def analyse(settings, include_history=False, use_approved=True):
 			proposed["warnings"].append("SUPPLIER_INFERRED")
 		if blanket_order:
 			proposed["warnings"].append("BLANKET_ORDER")
+			if not blanket_order["base_rate"]:
+				proposed["warnings"].append("BLANKET_ORDER_NO_EXCHANGE_RATE")
 			if proposed["suggested_purchase"] > blanket_order["remaining"] + 1e-9:
 				proposed["warnings"].append("BLANKET_ORDER_EXCEEDED")
 
 		last_purchase_rate = flt(item.last_purchase_rate)
-		# Value the suggestion at the agreed price when there is one.
-		purchase_rate = blanket_order["rate"] if blanket_order and blanket_order["rate"] else last_purchase_rate
+		# Value the suggestion at the agreed price (in company currency) when there is one.
+		purchase_rate = (
+			blanket_order["base_rate"] if blanket_order and blanket_order["base_rate"] else last_purchase_rate
+		)
 		result = frappe._dict(
 			item_code=item_code,
 			item_name=item.item_name,
@@ -442,6 +446,8 @@ def analyse(settings, include_history=False, use_approved=True):
 			last_purchase_rate=last_purchase_rate,
 			blanket_order=blanket_order["blanket_order"] if blanket_order else None,
 			blanket_order_rate=blanket_order["rate"] if blanket_order else 0,
+			blanket_order_currency=blanket_order["currency"] if blanket_order else None,
+			blanket_order_base_rate=(blanket_order["base_rate"] or 0) if blanket_order else 0,
 			blanket_order_remaining=blanket_order["remaining"] if blanket_order else 0,
 			blanket_order_to_date=blanket_order["to_date"] if blanket_order else None,
 			suggested_value=proposed["suggested_purchase"] * purchase_rate,

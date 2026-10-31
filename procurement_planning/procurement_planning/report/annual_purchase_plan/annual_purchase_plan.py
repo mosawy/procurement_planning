@@ -1,13 +1,18 @@
 # Copyright (c) 2026, Golive-Solutions and contributors
 # For license information, please see license.txt
 
-"""Plan vs actual for Purchasing Blanket Orders: planned, ordered, received, remaining."""
+"""Plan vs actual for Purchasing Blanket Orders: planned, ordered, received, remaining.
+
+The agreed rate is in the agreement's currency (the supplier's default currency;
+v14 Blanket Orders have none of their own); values are in the company currency
+at today's exchange rate."""
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, today
 
 from procurement_planning.permissions import ALLOWED_ROLES
+from procurement_planning.planning.data_sources import get_exchange_rates
 
 
 def execute(filters=None):
@@ -36,7 +41,7 @@ def get_data(filters):
 		select
 			bo.name as blanket_order, bo.supplier, bo.from_date, bo.to_date, bo.docstatus,
 			boi.item_code, i.item_name, boi.qty as planned_qty, ifnull(boi.ordered_qty, 0) as ordered_qty,
-			boi.rate,
+			boi.rate, sup.default_currency as supplier_currency,
 			(
 				select ifnull(sum(poi.received_qty * poi.conversion_factor), 0)
 				from `tabPurchase Order Item` poi
@@ -46,6 +51,7 @@ def get_data(filters):
 		from `tabBlanket Order` bo
 		inner join `tabBlanket Order Item` boi on boi.parent = bo.name and boi.parenttype = 'Blanket Order'
 		left join `tabItem` i on i.name = boi.item_code
+		left join `tabSupplier` sup on sup.name = bo.supplier
 		where {" and ".join(conditions)}
 		order by bo.supplier, bo.from_date, boi.idx
 		""",
@@ -53,12 +59,21 @@ def get_data(filters):
 		as_dict=True,
 	)
 
+	company_currency = frappe.get_cached_value("Company", filters.company, "default_currency")
+	rates = get_exchange_rates(
+		{row.supplier_currency or company_currency for row in rows}, company_currency, today()
+	)
 	for row in rows:
+		row.currency = row.supplier_currency or company_currency
+		row.company_currency = company_currency
+		row.exchange_rate = rates.get(row.currency) or 0
 		row.status = _("Draft") if row.docstatus == 0 else _("Submitted")
 		row.remaining_qty = flt(row.planned_qty) - flt(row.ordered_qty)
 		row.used_percent = flt(row.ordered_qty) / flt(row.planned_qty) * 100 if flt(row.planned_qty) else 0
-		row.planned_value = flt(row.planned_qty) * flt(row.rate)
-		row.ordered_value = flt(row.ordered_qty) * flt(row.rate)
+		# No exchange rate: values stay empty rather than mixing currencies.
+		base_rate = flt(row.rate) * row.exchange_rate if row.exchange_rate else None
+		row.planned_value = flt(row.planned_qty) * base_rate if base_rate is not None else None
+		row.ordered_value = flt(row.ordered_qty) * base_rate if base_rate is not None else None
 	return rows
 
 
@@ -76,7 +91,9 @@ def get_columns(filters):
 		{"label": _("Received Qty"), "fieldname": "received_qty", "fieldtype": "Float", "width": 100},
 		{"label": _("Remaining Qty"), "fieldname": "remaining_qty", "fieldtype": "Float", "width": 110},
 		{"label": _("Ordered %"), "fieldname": "used_percent", "fieldtype": "Percent", "width": 90},
-		{"label": _("Rate"), "fieldname": "rate", "fieldtype": "Currency", "width": 100},
-		{"label": _("Planned Value"), "fieldname": "planned_value", "fieldtype": "Currency", "width": 120},
-		{"label": _("Ordered Value"), "fieldname": "ordered_value", "fieldtype": "Currency", "width": 120},
+		{"label": _("Agreed Rate"), "fieldname": "rate", "fieldtype": "Currency", "options": "currency", "width": 110},
+		{"label": _("Currency"), "fieldname": "currency", "fieldtype": "Link", "options": "Currency", "width": 80},
+		{"label": _("Exchange Rate"), "fieldname": "exchange_rate", "fieldtype": "Float", "width": 100},
+		{"label": _("Planned Value"), "fieldname": "planned_value", "fieldtype": "Currency", "options": "company_currency", "width": 130},
+		{"label": _("Ordered Value"), "fieldname": "ordered_value", "fieldtype": "Currency", "options": "company_currency", "width": 130},
 	]

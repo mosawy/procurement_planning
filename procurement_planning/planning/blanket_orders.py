@@ -63,6 +63,14 @@ def link_purchase_order(doc, method=None):
 		return
 
 	allowance = flt(frappe.db.get_single_value("Buying Settings", "blanket_order_allowance")) / 100
+	# Agreed rates are in the agreement's (supplier's) currency; compare and
+	# record them in the PO currency.
+	po_currency = doc.currency or frappe.get_cached_value("Company", doc.company, "default_currency")
+	to_po_currency = data_sources.get_exchange_rates(
+		{c["currency"] for candidates in agreements.values() for c in candidates if c["currency"] != po_currency},
+		po_currency,
+		getdate(doc.transaction_date),
+	)
 
 	# Quantity this PO already takes from each agreement line.
 	taken = {}
@@ -97,15 +105,30 @@ def link_purchase_order(doc, method=None):
 			)
 			continue
 
+		agreed_rate = _rate_in_po_currency(agreement, po_currency, to_po_currency)
 		row.against_blanket_order = 1
 		row.blanket_order = agreement["blanket_order"]
-		row.blanket_order_rate = agreement["rate"]
+		row.blanket_order_rate = agreed_rate or 0
 		key = (agreement["blanket_order"], row.item_code)
 		taken[key] = taken.get(key, 0) + qty
 		linked.append(row.idx)
-		if agreement["rate"] and abs(flt(row.rate) - agreement["rate"]) > 0.005:
+		if agreed_rate is None:
 			other_price.append(
-				_("Row {0}: {1} rate {2}, agreed {3}").format(row.idx, row.item_code, row.rate, agreement["rate"])
+				_("Row {0}: {1} agreed {2}; no exchange rate to {3} to compare").format(
+					row.idx,
+					row.item_code,
+					frappe.format(agreement["rate"], {"fieldtype": "Currency", "options": agreement["currency"]}),
+					po_currency,
+				)
+			)
+		elif agreed_rate and abs(flt(row.rate) - agreed_rate) > 0.005:
+			other_price.append(
+				_("Row {0}: {1} rate {2}, agreed {3}").format(
+					row.idx,
+					row.item_code,
+					frappe.format(row.rate, {"fieldtype": "Currency", "options": po_currency}),
+					frappe.format(agreed_rate, {"fieldtype": "Currency", "options": po_currency}),
+				)
 			)
 
 	messages = []
@@ -123,6 +146,14 @@ def link_purchase_order(doc, method=None):
 		)
 	if messages:
 		frappe.msgprint("<br><br>".join(messages), title=_("Blanket Orders"), indicator="blue")
+
+
+def _rate_in_po_currency(agreement, po_currency, to_po_currency):
+	"""Agreed rate in the PO currency; None when no exchange rate is found."""
+	if agreement["currency"] == po_currency:
+		return agreement["rate"]
+	exchange_rate = to_po_currency.get(agreement["currency"])
+	return agreement["rate"] * exchange_rate if exchange_rate else None
 
 
 def _is_new_line(doc, row):

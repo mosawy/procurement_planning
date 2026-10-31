@@ -607,7 +607,7 @@
 				${stat(__("Net Sales (months used)"), item.net_sales, __("{0} months used of {1} · {2} stock-out months left out", [item.eligible_months, this.settings.analysis_months, (item.stockout_months || []).length]))}
 				${stat(__("Net Sales (fixed 12 months)"), item.net_sales_12m, __("{0} months with sales", [item.months_with_sales]))}
 				${stat(__("Supplier"), null, item.supplier ? `${item.supplier} (${__(item.supplier_source)})` : __("Not found"), true)}
-				${item.blanket_order ? stat(__("Blanket Order"), item.blanket_order_remaining, __("{0} · left to order · agreed rate {1} · valid to {2}", [item.blanket_order, format_money(item.blanket_order_rate, this.settings.currency), format_date(item.blanket_order_to_date)])) : ""}
+				${item.blanket_order ? stat(__("Blanket Order"), item.blanket_order_remaining, __("{0} · left to order · agreed rate {1} · valid to {2}", [item.blanket_order, agreed_rate(item, this.settings.currency), format_date(item.blanket_order_to_date)])) : ""}
 				${stat(__("Lead Time"), null, item.lead_time_days ? __("{0} days · {1}", [item.lead_time_days, lead_time_label(item)]) : __("Not available"), true)}
 				${stat(__("Minimum Order Qty"), item.min_order_qty, item.order_multiple ? __("Order multiple {0}", [format_qty(item.order_multiple)]) : "")}
 				${stat(__("Last Purchase Rate"), null, item.last_purchase_rate ? format_money(item.last_purchase_rate, this.settings.currency) : __("Not available"), true)}
@@ -844,6 +844,17 @@
 	function format_money(value, currency) {
 		if (value === null || value === undefined) return "—";
 		return format_currency(value, currency, 0);
+	}
+
+	// Agreed rate in the agreement's (supplier's) currency, with the company currency value: "$140 (525 SAR)".
+	function agreed_rate(item, company_currency) {
+		const currency = item.blanket_order_currency || company_currency;
+		const agreed = format_currency(item.blanket_order_rate, currency, 2);
+		if (currency === company_currency) return agreed;
+		const base = item.blanket_order_base_rate
+			? format_currency(item.blanket_order_base_rate, company_currency, 2)
+			: __("no exchange rate");
+		return `${agreed} (${base})`;
 	}
 
 	function lead_time_label(item) {

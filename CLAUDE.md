@@ -185,6 +185,14 @@ Order `validate` hook `planning.blanket_orders.link_purchase_order` ticks Agains
 new lines for the PO supplier (respects Buying Settings allowance, clears an MR agreement of
 another supplier), so ERPNext's `ordered_qty` on the agreement goes down on submit.
 Parameter lines can no longer be added by hand (`in_create`).
+Agreement currency (fix 2026-11-01): v14 Blanket Orders have no currency and their rate is
+used as the PO rate in the PO currency, so the rate is in the supplier's currency
+(Supplier `default_currency`, else company currency). `get_active_blanket_orders` returns
+`currency`, `exchange_rate` and `base_rate` (company currency, ERPNext `get_exchange_rate`
+for buying on the analysis date; None when no rate, warning `BLANKET_ORDER_NO_EXCHANGE_RATE`
+and the suggestion falls back to the last purchase rate). Planning `suggested_value`, the item
+details ("$140 (525 SAR)"), the Annual Purchase Plan report (today's rate) and the dashboards
+use the converted value; the PO hook compares and sets `blanket_order_rate` in the PO currency.
 Review 2026-10-30 (checked against v14 source): the hook sizes a line by max(stock_qty, qty)
 because ERPNext draws down by stock_qty but `validate_against_blanket_order` compares qty;
 it clears `blanket_order` on lines not Against Blanket Order (ERPNext counts any submitted line

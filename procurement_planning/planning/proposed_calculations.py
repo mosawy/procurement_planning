@@ -44,6 +44,7 @@ WARNING_LABELS = {
 	"NO_SUPPLIER": "No supplier found for the item",
 	"SUPPLIER_INFERRED": "Supplier inferred from Purchase Order history, not maintained on the item",
 	"BLANKET_ORDER": "Supplier and price come from an active purchasing agreement (Blanket Order)",
+	"BLANKET_ORDER_NO_EXCHANGE_RATE": "No exchange rate for the agreement's currency on the analysis date: the suggestion is valued at the last purchase rate",
 	"BLANKET_ORDER_EXCEEDED": "Suggested quantity is more than what is left on the Blanket Order",
 }
 

@@ -527,8 +527,14 @@ def get_item_supplier_sources(params, history_months):
 def get_active_blanket_orders(company, on_date, supplier=None, item_codes=None):
 	"""{item_code: [agreement]} of submitted Purchasing Blanket Orders of the
 	company valid on on_date. Each agreement: blanket_order, supplier, rate,
-	qty, ordered_qty, remaining (stock UOM; ordered = submitted POs linked to
-	it, as ERPNext keeps it), to_date."""
+	currency, exchange_rate, base_rate, qty, ordered_qty, remaining (stock UOM;
+	ordered = submitted POs linked to it, as ERPNext keeps it), to_date.
+
+	A Blanket Order has no currency in v14: its rate is used as the PO rate in
+	the PO currency, i.e. the supplier's. The agreement currency is the
+	Supplier's default currency (else the company's); base_rate converts the
+	rate to the company currency on on_date (None when no exchange rate exists).
+	"""
 	conditions = [
 		"bo.blanket_order_type = 'Purchasing'",
 		"bo.docstatus = 1",
@@ -548,27 +554,50 @@ def get_active_blanket_orders(company, on_date, supplier=None, item_codes=None):
 	rows = frappe.db.sql(
 		f"""
 		select boi.item_code, bo.name as blanket_order, bo.supplier, bo.to_date,
-			boi.rate, boi.qty, ifnull(boi.ordered_qty, 0) as ordered_qty
+			boi.rate, boi.qty, ifnull(boi.ordered_qty, 0) as ordered_qty,
+			sup.default_currency as supplier_currency
 		from `tabBlanket Order` bo
 		inner join `tabBlanket Order Item` boi on boi.parent = bo.name and boi.parenttype = 'Blanket Order'
+		left join `tabSupplier` sup on sup.name = bo.supplier
 		where {" and ".join(conditions)}
 		""",
 		values,
 		as_dict=True,
 	)
+	company_currency = frappe.get_cached_value("Company", company, "default_currency")
+	rates = get_exchange_rates(
+		{row.supplier_currency or company_currency for row in rows}, company_currency, on_date
+	)
 	result = {}
 	for row in rows:
+		currency = row.supplier_currency or company_currency
+		exchange_rate = rates.get(currency)
 		result.setdefault(row.item_code, []).append(
 			dict(
 				blanket_order=row.blanket_order,
 				supplier=row.supplier,
 				to_date=getdate(row.to_date),
 				rate=flt(row.rate),
+				currency=currency,
+				exchange_rate=exchange_rate,
+				base_rate=flt(row.rate) * exchange_rate if exchange_rate else None,
 				qty=flt(row.qty),
 				ordered_qty=flt(row.ordered_qty),
 				remaining=flt(row.qty) - flt(row.ordered_qty),
 			)
 		)
+	return result
+
+
+def get_exchange_rates(currencies, to_currency, on_date):
+	"""{currency: rate to to_currency on on_date} from ERPNext's Currency Exchange
+	records (or its configured provider); None when no rate is found."""
+	from erpnext.setup.utils import get_exchange_rate
+
+	result = {}
+	for currency in currencies:
+		rate = get_exchange_rate(currency, to_currency, str(getdate(on_date)), "for_buying")
+		result[currency] = flt(rate) or None
 	return result
 
 
