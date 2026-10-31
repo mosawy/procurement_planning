@@ -29,6 +29,8 @@ DEFAULTS = {
 	"fx_buffer_percent": 2,
 	"delivery_buffer_days": 7,
 	"default_margin_percent": 20,
+	"minimum_margin_percent": 10,
+	"below_minimum_rate_role": None,
 }
 
 INT_FIELDS = (
@@ -45,7 +47,13 @@ INT_FIELDS = (
 	"delivery_buffer_days",
 )
 
-FLOAT_FIELDS = ("stockout_day_ratio", "default_landed_cost_percent", "fx_buffer_percent", "default_margin_percent")
+FLOAT_FIELDS = (
+	"stockout_day_ratio",
+	"default_landed_cost_percent",
+	"fx_buffer_percent",
+	"default_margin_percent",
+	"minimum_margin_percent",
+)
 
 
 def get_company_settings(company):

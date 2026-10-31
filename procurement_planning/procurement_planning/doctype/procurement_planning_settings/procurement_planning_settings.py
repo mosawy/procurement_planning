@@ -38,6 +38,10 @@ class ProcurementPlanningSettings(Document):
 				frappe.throw(_("{0} cannot be negative").format(_(self.meta.get_label(fieldname))))
 		if not 0 <= flt(self.default_margin_percent) < 100:
 			frappe.throw(_("Default Margin % must be from 0 up to below 100"))
+		if not 0 <= flt(self.minimum_margin_percent) < 100:
+			frappe.throw(_("Minimum Margin % must be from 0 up to below 100"))
+		if flt(self.minimum_margin_percent) > flt(self.default_margin_percent):
+			frappe.throw(_("Minimum Margin % cannot be above Default Margin %"))
 
 		if self.default_purchase_warehouse:
 			warehouse = frappe.db.get_value(

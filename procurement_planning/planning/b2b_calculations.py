@@ -169,6 +169,47 @@ def quotation_rate(unit_cost, margin_percent_value, conversion_factor=1, convers
 	return rate / (conversion_rate or 1)
 
 
+def sourcing_rates(unit_cost, margin_percent_value, minimum_margin_percent):
+	"""(suggested, minimum) selling rate per stock UOM in company currency for
+	the unit cost the price is built on: the suggested rate earns the margin,
+	the minimum rate the minimum margin (both gross margin on the selling price)."""
+	return selling_rate(unit_cost, margin_percent_value), selling_rate(unit_cost, minimum_margin_percent)
+
+
+QTY_CHANGE_BLOCK = "block"
+QTY_CHANGE_WARN = "warn"
+
+
+def sourced_qty_change(sourced_qty, qty, customer_bears_excess=False):
+	"""How a quotation line whose quantity moved away from the sourced quantity
+	is treated: None (unchanged), QTY_CHANGE_WARN or QTY_CHANGE_BLOCK.
+
+	More than sourced always blocks: the offer, its minimum order and the
+	promise were for the sourced quantity. Less only warns, unless the customer
+	bears the supplier minimum: the unit cost is the whole purchase spread over
+	the sourced quantity, so a lower quantity makes the price too low.
+	"""
+	if not sourced_qty or abs((qty or 0) - sourced_qty) <= 1e-9:
+		return None
+	if qty > sourced_qty or customer_bears_excess:
+		return QTY_CHANGE_BLOCK
+	return QTY_CHANGE_WARN
+
+
+def sourcing_request_status(docstatus, lines_with_offer, total_lines, has_rfq=False):
+	"""Status of a Sourcing Request: Draft until suppliers are asked or an offer
+	is chosen, Waiting for Offers until every line has one, then Ready."""
+	if docstatus == 1:
+		return "Submitted"
+	if docstatus == 2:
+		return "Cancelled"
+	if total_lines and lines_with_offer >= total_lines:
+		return "Ready"
+	if has_rfq or lines_with_offer:
+		return "Waiting for Offers"
+	return "Draft"
+
+
 def sourcing_status(lines):
 	"""Quotation sourcing status from its lines (dicts with needs_sourcing and supplier_quotation_item)."""
 	sourcing = [line for line in lines if line.get("needs_sourcing")]

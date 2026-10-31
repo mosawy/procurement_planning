@@ -7,6 +7,8 @@ import unittest
 from datetime import date
 
 from procurement_planning.planning.b2b_calculations import (
+	QTY_CHANGE_BLOCK,
+	QTY_CHANGE_WARN,
 	EXCESS_CUSTOMER_BEARS,
 	EXCESS_TO_STOCK,
 	back_to_back_stage,
@@ -24,6 +26,9 @@ from procurement_planning.planning.b2b_calculations import (
 	quotation_rate,
 	rank_offers,
 	selling_rate,
+	sourced_qty_change,
+	sourcing_rates,
+	sourcing_request_status,
 	sourcing_status,
 	weighted_average_cost,
 )
@@ -180,3 +185,31 @@ class TestGrossProfit(unittest.TestCase):
 		self.assertAlmostEqual(line_gross_profit(275, 1, 220, 10), 550)
 		# box of 10 sold at 2,750 per box, 2 boxes
 		self.assertAlmostEqual(line_gross_profit(2750, 10, 220, 20), 1100)
+
+
+class TestSourcingRequest(unittest.TestCase):
+	def test_sourcing_rates(self):
+		# landed cost 220, margin 20% -> 275; minimum margin 10% -> 244.44
+		suggested, minimum = sourcing_rates(220, 20, 10)
+		self.assertAlmostEqual(suggested, 275)
+		self.assertAlmostEqual(minimum, 220 / 0.9)
+		self.assertEqual(sourcing_rates(100, 0, 0), (100, 100))
+
+	def test_sourced_qty_change_excess_to_stock(self):
+		self.assertIsNone(sourced_qty_change(10, 10))
+		self.assertEqual(sourced_qty_change(10, 12), QTY_CHANGE_BLOCK)
+		self.assertEqual(sourced_qty_change(10, 8), QTY_CHANGE_WARN)
+		self.assertIsNone(sourced_qty_change(0, 8))
+
+	def test_sourced_qty_change_customer_bears_excess(self):
+		self.assertEqual(sourced_qty_change(10, 12, customer_bears_excess=True), QTY_CHANGE_BLOCK)
+		self.assertEqual(sourced_qty_change(10, 8, customer_bears_excess=True), QTY_CHANGE_BLOCK)
+		self.assertIsNone(sourced_qty_change(10, 10, customer_bears_excess=True))
+
+	def test_sourcing_request_status(self):
+		self.assertEqual(sourcing_request_status(0, 0, 2), "Draft")
+		self.assertEqual(sourcing_request_status(0, 0, 2, has_rfq=True), "Waiting for Offers")
+		self.assertEqual(sourcing_request_status(0, 1, 2), "Waiting for Offers")
+		self.assertEqual(sourcing_request_status(0, 2, 2), "Ready")
+		self.assertEqual(sourcing_request_status(1, 2, 2), "Submitted")
+		self.assertEqual(sourcing_request_status(2, 2, 2), "Cancelled")

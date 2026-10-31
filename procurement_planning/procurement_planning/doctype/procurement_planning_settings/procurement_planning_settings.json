@@ -30,7 +30,9 @@
   "fx_buffer_percent",
   "back_to_back_column",
   "delivery_buffer_days",
-  "default_margin_percent"
+  "default_margin_percent",
+  "minimum_margin_percent",
+  "below_minimum_rate_role"
  ],
  "fields": [
   {
@@ -180,15 +182,29 @@
   },
   {
    "default": "20",
-   "description": "Gross margin proposed when pricing a back-to-back quotation line. The sales user can change it.",
+   "description": "Gross margin of the suggested rate written to a sourced quotation line. Purchasing can change it per Sourcing Request.",
    "fieldname": "default_margin_percent",
    "fieldtype": "Percent",
    "label": "Default Margin %"
+  },
+  {
+   "default": "10",
+   "description": "Gross margin of the minimum rate written to a sourced quotation line. A quotation line priced below its minimum rate cannot be submitted.",
+   "fieldname": "minimum_margin_percent",
+   "fieldtype": "Percent",
+   "label": "Minimum Margin %"
+  },
+  {
+   "description": "Users with this role may submit a quotation with a sourced line below its minimum rate. Empty: nobody.",
+   "fieldname": "below_minimum_rate_role",
+   "fieldtype": "Link",
+   "label": "Role Allowed Below Minimum Rate",
+   "options": "Role"
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-29 18:00:00.000000",
+ "modified": "2026-10-31 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Procurement Planning Settings",
