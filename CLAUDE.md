@@ -41,6 +41,15 @@ demos use analysis date 2026-09-08.
   Lead Time Profile (+ Entry), Reorder Parameter Run, Reorder Parameter Line,
   Sourcing Request (+ Item)
 - `procurement_planning/procurement_planning/page/procurement_planning/` – planning screen
+  (takes `frappe.route_options`: company, analysis_date, search, card, risk, supplier,
+  abc_class, missing_lead_time)
+- Pages `planned-purchasing-dashboard` (planning roles) and `back-to-back-dashboard`
+  (System Manager by default); data in `planning/dashboard_data.py`, pure logic in
+  `planning/dashboard_calculations.py` (+ tests); shared CSS/JS
+  `public/css/purchasing_dashboards.css`, `public/js/purchasing_dashboards.js`
+  (`app_include_css` / `app_include_js`). Workspace **Procurement** (not "Procurement
+  Planning": a workspace with that title takes the route /app/procurement-planning of the
+  planning page, the v14 router checks workspaces first).
 - `procurement_planning/procurement_planning/report/` – Item Reorder Analysis, Annual Purchase Plan,
   Back-to-Back Order Cost, Back-to-Back Sales Tracker, Back-to-Back Purchase Tracker
 - `procurement_planning/planning/back_to_back.py` – back-to-back flow (frappe);
@@ -203,6 +212,23 @@ agreement too, as decided by the user.
 VM test 2026-11-01: steps 1-9 of the README test script passed. Step 10 failed with
 "Duplicate row 3 with same Supplier Quotation Item" (excess row carried the item link);
 fixed, plus SR rows only from the Quotation and SO delivery dates from the promise.
+
+Dashboards (2026-11-02, not yet tested on the VM):
+- Planned: `get_planned_dashboard(company, analysis_date, refresh)` caches the summary of
+  `api.analyse(use_approved=True)` per company and date for 10 minutes. KPIs below reorder,
+  high risk, suggested value, no supplier / no lead time, late POs (planned lines expected
+  before date - tolerance), in transit (Purchase Shipment); active run; agreements in force with
+  drawdown by converted value (flags: ending within 30 days, > 85 %); suggested value by
+  supplier, risk by ABC, PO value by month vs agreement plan spread evenly over its months;
+  top 10 to buy; old open MRs and suppliers slower than their profile (90-day median).
+- Back-to-back: `get_back_to_back_dashboard(company, from_date, to_date)` (checks the page
+  roles). Funnel = quotations with sourcing lines dated in the period, each counted up to its
+  furthest stage (sent, priced, submitted, won, purchase requested, ordered, received,
+  delivered) + live Waiting/Ready counts; win rate = won / submitted. KPIs turnaround
+  (`Sourcing Request.submitted_on` - creation; old ones backfilled from modified), late
+  (days late > 0) and at risk (-7..0), offers expiring in 7 days on draft requests, sales and
+  quoted margin, excess to stock (`Purchase Order Item.is_excess`). Quoted vs actual margin by
+  month (`b2b_calculations.sales_line_cost`, shared with the Order Cost report), top suppliers.
 
 Next: user re-tests step 10 onwards on the VM (see the test script in the README section
 "Back-to-back purchasing"); old back-to-back test data need not be migrated.

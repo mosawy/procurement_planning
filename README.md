@@ -178,13 +178,34 @@ purchasing user and one manager to see the separation):
     quotation is *Pending Sourcing* again; amend and submit the request to
     return the prices.
 
+### Dashboards
+
+Workspace **Procurement** gathers both dashboards, the planning screen, the
+documents and the reports.
+
+- **Planned Purchasing Dashboard** (`/app/planned-purchasing-dashboard`,
+  planning roles): where planned buying stands on a date (default today). Items
+  below reorder level and at high risk, suggested purchase value, missing
+  supplier or lead time, late Purchase Orders, goods in transit; the active
+  parameter run and when the next is due; purchasing agreements with how much
+  is drawn; suggested value by supplier, risk by ABC class, Purchase Orders
+  against the agreement plan; the 10 items to buy first; old open requests and
+  suppliers slower than their lead time profile. The analysis is cached for 10
+  minutes; *Refresh* recalculates. Every number opens the documents or the
+  planning screen filtered on it.
+- **Back-to-Back Dashboard** (`/app/back-to-back-dashboard`, management): the
+  funnel of the period's back-to-back quotations from request to delivery with
+  the win rate, sourcing turnaround, lines late or at risk against the promise,
+  offers about to expire, sales and margin, supplier minimum excess bought into
+  stock, quoted vs actual margin by month, top suppliers and the late lines.
+
 ### Tests
 
 The calculation modules are pure Python:
 
 ```bash
 cd apps/procurement_planning
-python3 -m unittest procurement_planning.planning.test_calculations procurement_planning.planning.test_b2b_calculations
+python3 -m unittest procurement_planning.planning.test_calculations procurement_planning.planning.test_b2b_calculations procurement_planning.planning.test_dashboard_calculations
 ```
 
 #### License

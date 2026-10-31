@@ -92,6 +92,7 @@
 			this.make_layout();
 			this.make_filters();
 			this.bind_events();
+			this.page.add_inner_button(__("Dashboard"), () => frappe.set_route("planned-purchasing-dashboard"));
 			this.page.add_inner_button(__("Settings"), () => this.open_settings());
 			this.page.add_inner_button(__("Parameter Runs"), () => frappe.set_route("List", "Reorder Parameter Run"));
 			this.page.add_inner_button(__("Lead Time Profiles"), () => frappe.set_route("List", "Lead Time Profile"));
