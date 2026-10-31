@@ -9,7 +9,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import flt, formatdate, getdate, today
+from frappe.utils import flt, formatdate, getdate, now_datetime, today
 
 from procurement_planning.planning import back_to_back
 from procurement_planning.planning.b2b_calculations import sourcing_request_status
@@ -69,6 +69,7 @@ class SourcingRequest(Document):
 			frappe.msgprint("<br>".join(warnings), title=_("Check the offers"), indicator="orange")
 
 	def on_submit(self):
+		self.db_set("submitted_on", now_datetime())
 		back_to_back.return_prices_to_quotation(self)
 
 	def before_cancel(self):

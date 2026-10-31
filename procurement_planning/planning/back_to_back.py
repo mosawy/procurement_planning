@@ -893,6 +893,7 @@ def _make_purchase_order(mr, supplier, currency, entries, settings, on_date):
 		if excess_qty > 1e-9:
 			excess_row = dict(base, **_offer_quantity(offer, excess_qty, line.stock_uom))
 			excess_row["warehouse"] = settings.default_purchase_warehouse or line.warehouse
+			excess_row["is_excess"] = 1
 			# One PO row per Supplier Quotation Item: ERPNext refuses a second row
 			# on the same one (validate_with_previous_doc). Same rate, header link kept.
 			excess_row.pop("supplier_quotation_item", None)

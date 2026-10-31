@@ -233,6 +233,17 @@ CUSTOM_FIELDS = {
 		},
 	],
 	"Request for Quotation Item": sourcing_link_fields("material_request_item"),
+	"Purchase Order Item": [
+		{
+			"fieldname": "is_excess",
+			"label": "Supplier Minimum Excess",
+			"fieldtype": "Check",
+			"insert_after": "sales_order_item",
+			"read_only": 1,
+			"no_copy": 1,
+			"description": "Quantity bought above a back-to-back customer order to meet the supplier minimum; goes to stock.",
+		},
+	],
 	"Supplier Quotation Item": [
 		{
 			"fieldname": "min_order_qty",
@@ -348,6 +359,7 @@ def make_custom_fields():
 	remove_obsolete_reports()
 	create_custom_fields(CUSTOM_FIELDS, update=True)
 	make_property_setters()
+	backfill_submitted_on()
 
 
 def remove_obsolete_fields():
@@ -375,6 +387,16 @@ def remove_obsolete_reports():
 			frappe.delete_doc("Report", name, ignore_permissions=True, force=True)
 		finally:
 			frappe.flags.in_patch = in_patch
+
+
+def backfill_submitted_on():
+	"""Sourcing Requests submitted before submitted_on existed: their last change
+	is the best record of when."""
+	if frappe.db.has_column("Sourcing Request", "submitted_on"):
+		frappe.db.sql(
+			"""update `tabSourcing Request` set submitted_on = modified
+			where docstatus = 1 and submitted_on is null"""
+		)
 
 
 def make_property_setters():

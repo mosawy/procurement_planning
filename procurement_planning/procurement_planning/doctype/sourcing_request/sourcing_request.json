@@ -15,6 +15,7 @@
   "margin_percent",
   "status",
   "quotation",
+  "submitted_on",
   "amended_from",
   "items_section",
   "items"
@@ -82,6 +83,14 @@
    "read_only": 1
   },
   {
+   "description": "When purchasing returned the prices; used for the sourcing turnaround.",
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
@@ -109,7 +118,7 @@
  "index_web_pages_for_search": 0,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-01 10:00:00.000000",
+ "modified": "2026-11-02 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Sourcing Request",
