@@ -10,7 +10,7 @@ Arabic; reply to him in Arabic, keep code, comments and commit messages in Engli
 There is no Frappe bench or database here. Code is checked offline:
 
 ```bash
-python3 -m unittest procurement_planning.planning.test_calculations procurement_planning.planning.test_b2b_calculations
+python3 -m unittest procurement_planning.planning.test_calculations procurement_planning.planning.test_b2b_calculations procurement_planning.planning.test_dashboard_calculations
 find . -name "*.py" -exec python3 -m py_compile {} \;
 for f in $(find . -name "*.js"); do node --check "$f"; done
 for f in $(find . -name "*.json"); do python3 -c "import json; json.load(open('$f'))"; done
