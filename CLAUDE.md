@@ -34,12 +34,17 @@ demos use analysis date 2026-09-08.
 - `procurement_planning/planning/` – logic
   - pure: `proposed_calculations.py`, `sap_calculations.py`, `demand_history.py`,
     `lead_time.py`, `b2b_calculations.py`
-  - frappe: `data_sources.py` (all SQL), `api.py` (planning page API), `settings.py`,
-    `lead_time_service.py`, `parameter_run.py`, `annual_plan.py`
+  - frappe: `data_sources.py` (planning and report SQL), `api.py` (planning page API),
+    `settings.py`, `lead_time_service.py`, `parameter_run.py`, `annual_plan.py`,
+    `back_to_back.py`, `blanket_orders.py`
 - `procurement_planning/procurement_planning/doctype/` – Procurement Planning Settings,
-  Lead Time Profile (+ Entry), Reorder Parameter Run, Reorder Parameter Line
+  Lead Time Profile (+ Entry), Reorder Parameter Run, Reorder Parameter Line,
+  Sourcing Request (+ Item)
 - `procurement_planning/procurement_planning/page/procurement_planning/` – planning screen
-- `procurement_planning/procurement_planning/report/` – Item Reorder Analysis, Annual Purchase Plan
+- `procurement_planning/procurement_planning/report/` – Item Reorder Analysis, Annual Purchase Plan,
+  Back-to-Back Order Cost, Back-to-Back Sales Tracker, Back-to-Back Purchase Tracker
+- `procurement_planning/planning/back_to_back.py` – back-to-back flow (frappe);
+  `public/js/quotation.js`, `sales_order.js`, `material_request.js` via `doctype_js`
 - `procurement_planning/install.py` – custom fields on standard DocTypes, created by
   `after_install` / `after_migrate` (no fixtures). Add new custom fields here.
 - Permissions: planning page and new DocTypes are System Manager only
@@ -67,99 +72,95 @@ Tested end to end by the user on his VM.
    stuck on Calculating) and tell the user, or offer a "Calculate now" path that runs
    inline for small companies.
 
-## Phase 2 – back-to-back (in progress, branch `phase-2-back-to-back`)
+## Phase 2 – back-to-back (branch `phase-2-back-to-back`, redesigned 2026-10-31)
 
-Purchasing for a specific customer order, for items not in stock or not stocked at all,
-possibly brands the company does not normally sell. Flow agreed with the client:
+Purchasing for a specific customer order, for items not in stock or not stocked at all.
+Principle (approved by the user): documents that cross between departments carry only
+what the other side may see. Purchasing never sees the customer or the selling price;
+sales never sees the supplier or the cost. Hidden data that must stay on a sales document
+(cost, valuation rate, gross profit) is on permlevel 1. The user sets up roles and
+permissions himself; the app ships documents, fields, buttons and logic.
 
-Quotation (draft, items marked `needs_sourcing`) → purchasing asks suppliers → supplier
-offers (standard Supplier Quotation) → purchasing picks an offer per line → sales prices
-the quotation (cost + margin) and promises a date → customer accepts → Sales Order →
-back-to-back Purchase Order(s) raised against the Sales Order lines.
+Flow:
+1. Quotation (sales): lines ticked `needs_sourcing`; header `required_by_date`, `priority`,
+   `sourcing_status` (Pending Sourcing / Ready).
+2. Quotation button Back-to-Back > Request Sourcing (`back_to_back.request_sourcing`): a new
+   submittable **Sourcing Request** (purchasing) with only those lines, no customer, no
+   selling rate. Created with ignore_permissions after checking Quotation write. Lines on an
+   active (not cancelled) Sourcing Request are skipped. Only made from Quotations (`in_create`).
+3. Sourcing Request > Create > Request for Quotation (`make_request_for_quotation`, mapper);
+   RFQ Item and Supplier Quotation Item carry `sourcing_request` / `sourcing_request_item`
+   (the standard RFQ -> SQ mapping copies them; the supplier portal path does not).
+4. Sourcing Request button Supplier Offers (`get_supplier_offers` / `select_offers`): offers
+   made for the line (matched on the quotation line, so offers made for a cancelled request
+   it amends count) plus other valid offers, ranked by priority; no-lead-time warning and
+   confirmation; excess pricing per line. The request re-prices each chosen offer on save
+   (`evaluate_sourcing_line`): landed cost, purchase/excess qty, `pricing_cost` (landed cost,
+   or the excess spread over the customer qty when the customer bears it), suggested rate
+   (header `margin_percent`, default settings `default_margin_percent`, not below the minimum
+   margin) and minimum rate (settings `minimum_margin_percent`), promised date. Status Draft /
+   Waiting for Offers / Ready / Submitted / Cancelled.
+5. Submit (every line needs an offer; expired offers and missing lead times warn) writes to
+   the DRAFT Quotation lines only: `suggested_rate`, `minimum_rate` (per Quotation UOM and
+   currency), `promised_date`, `quote_valid_till`, `sourced_stock_qty`, `sourced_qty_locked`
+   (customer bears a real excess), `estimated_landed_cost` = pricing cost (permlevel 1),
+   valuation rate and gross profit, links to the request line; `sourcing_status` Ready (db
+   writes, Quotation modified moves on); Notification Log to the Quotation owner. Cancel clears
+   them from a draft Quotation and is refused while a submitted Quotation uses them.
+6. Quotation submit (`before_submit_quotation`): blocks lines without a price, a qty above
+   the sourced qty or any change when `sourced_qty_locked`, a rate below the minimum (cost and
+   current minimum margin in the line's UOM/currency) unless the user has settings
+   `below_minimum_rate_role`; warns on a lower qty, an expired or shorter price validity, no
+   promised date. Duplicated quotations drop the copied sourcing (`clear_foreign_sourcing`).
+7. Sales Order by the standard mapping; `make_sales_order` is overridden only to drop
+   permlevel 1 fields before the unsaved order goes to the browser; the SO validate hook
+   takes the cost from the Quotation Item on the server (`copy_cost_from_quotation`).
+8. Sales Order button Back-to-Back > Request Purchase (`request_purchase`): draft Material
+   Request (Purchase, `procurement_type` Back-to-Back) with the sourced lines: stock qty,
+   warehouse, schedule date = promise - delivery buffer, standard `sales_order` /
+   `sales_order_item`, `sourcing_request(_item)`; no customer or rate; ignore_permissions after
+   checking SO write; left in draft for the MR approval workflow.
+9. Submitted Back-to-Back MR > Create > Back-to-Back Purchase Orders
+   (`make_back_to_back_purchase_orders`): one draft PO per supplier and currency at the offer
+   chosen on the submitted Sourcing Request; customer line linked to MR and SO lines, MOQ
+   excess on a separate unlinked line; `expected_delivery_date` on lines and, when the field
+   exists, the header; expired offer warns; a qty not whole in the offer UOM goes in stock UOM
+   without the SQ item link. The Blanket Order hook still applies.
+10. Receipt and Delivery Note are standard.
 
-Decisions already taken:
-- Build on standard ERPNext documents only (Quotation, Material Request, Request for
-  Quotation, Supplier Quotation, Sales Order, Purchase Order). Do NOT depend on the
-  client's custom "Sales Request For Quotation" DocType; that site is a test copy.
-- Estimated landed cost = supplier unit cost in company currency × (1 + landed % + FX
-  buffer % if foreign currency). Landed % comes from the Supplier custom field
-  `landed_cost_percent`, else settings `default_landed_cost_percent`. (Deriving it from
-  past Landed Cost Vouchers is a later improvement: only ~23% of receipts have one.)
-- Promised date = today + offer lead time + settings `delivery_buffer_days`.
-- Supplier minimum order: buy max(need, MOQ). The excess is priced either into the
-  customer's unit cost (`Customer Bears Excess`) or put into stock (`Excess to Stock`).
-  The PO gets two lines: the customer's quantity linked to the Sales Order line, and the
-  excess as a separate unlinked line so planning sees it as normal stock.
-- Planning already excludes back-to-back: SO lines that have a PO line with
-  `sales_order_item` pointing at them, and those PO lines (`exclude_back_to_back` setting).
-- Priority (Urgent / Normal / Flexible) and required-by date on Quotation and Sales
-  Order. Urgent ranks offers by earliest promise, others by cost.
+Pricing: landed cost = supplier unit cost in company currency x (1 + supplier
+`landed_cost_percent` or settings default + FX buffer if foreign currency); suggested =
+cost / (1 - margin); minimum = cost / (1 - minimum margin) (`b2b_calculations.sourcing_rates`).
 
-Done on this branch (all steps of the plan; not yet tested on the VM):
-- `planning/b2b_calculations.py` + `test_b2b_calculations.py`
-- Settings section: `default_landed_cost_percent`, `fx_buffer_percent`,
-  `delivery_buffer_days`, `default_margin_percent` (also in `planning/settings.py`)
-- Custom fields in `install.py`: Quotation / Sales Order `required_by_date`, `priority`;
-  Quotation `sourcing_status`, `sourcing_request`; Sales Order `is_back_to_back`;
-  Quotation Item / Sales Order Item `needs_sourcing` + sourcing section
-  (`supplier_quotation`, `supplier_quotation_item`, `sourcing_supplier`,
-  `estimated_landed_cost`, `promised_date`, `purchase_qty`, `excess_qty`,
-  `excess_pricing`, `quote_valid_till`); Material Request Item `sales_quotation`,
-  `quotation_item`; Supplier Quotation Item `min_order_qty`; Supplier `landed_cost_percent`.
-- `planning/back_to_back.py`: `request_sourcing`, `get_supplier_offers`, `select_offers`,
-  Quotation `validate` / `before_submit` hooks, `make_back_to_back_purchase_orders`
-  (PO lines link the MR line only while it has unordered quantity left, so the MR
-  is not over-ordered).
-- `public/js/quotation.js`, `public/js/sales_order.js` via `doctype_js`.
-- Reports Back-to-Back Order Cost (tree) and Back-to-Back Tracker; SQL in
-  `data_sources.get_back_to_back_sales_order_lines` / `get_back_to_back_purchase_lines`.
-- Planning no longer counts Back-to-Back Material Requests as pending supply.
+Permlevel 1: custom `estimated_landed_cost`; standard `valuation_rate` and `gross_profit` of
+Quotation Item and Sales Order Item (Property Setters in `install.COST_FIELDS`). Permlevel
+access is decided by the parent's (Quotation / Sales Order) permission rules.
+Known Frappe v14 limit: the response to saving a document (`savedocs` -> `send_updated_docs`)
+returns all fields, so a sales user's browser receives permlevel 1 values of the Quotation it
+just saved (hidden in the form, visible in developer tools). Stripping them in `on_update`
+would corrupt Version records; not done. The form load (`getdoc`) strips them.
 
-Tested on the VM on 2026-10-29: the whole flow works end to end (Quotation → Request
-Sourcing → MR → RFQ → two Supplier Quotations → Supplier Offers dialog ranked them with
-Best / Requested → Apply Selection set rate 275 from cost 220 and 20% margin → fields
-copied to the Sales Order → Create Back-to-Back POs made a draft PO linked to the MR, SO
-and Supplier Quotation → both reports show the order). The first migrate failed only
-because the VM disk was full (MariaDB 1114 "table is full"); fixed by extending the LV.
+Reports: Back-to-Back Order Cost (System Manager by default: cost and margin), Back-to-Back
+Sales Tracker (Sales roles: no supplier/PO/cost), Back-to-Back Purchase Tracker (Purchase
+roles: per MR line, no customer/selling price). Stage logic: `b2b_calculations.purchase_progress`.
 
-### Phase 2 fixes from the VM test (all six done, not yet re-tested on the VM)
+Migrate cleanup (`install.py`): the first design's custom fields (`OBSOLETE_FIELDS`, supplier
+and offer on sales lines, `sales_quotation` / `quotation_item` on MR Item, Quotation header
+`sourcing_request` to MR) are deleted with their columns; the old Back-to-Back Tracker report
+is deleted.
 
-1. Offer without a lead time: Promised Date stays empty and the PO "Required By" falls
-   back to the Sales Order delivery date. In the Supplier Offers dialog flag offers with
-   no lead time ("No lead time" badge, empty Promise shown as a warning) and ask for
-   confirmation before applying one; in Quotation `before_submit` warn (msgprint, not
-   throw) for sourcing lines without `promised_date`.
-2. Quotation form: the "Some items need sourcing…" headline was shown twice once
-   (`public/js/quotation.js` line ~29, `frm.dashboard.set_headline` called on more than
-   one event). Make it idempotent (clear first, or set it from a single place).
-3. Gross Profit on Quotation / Sales Order lines that are sourced is wrong: ERPNext uses
-   `valuation_rate`, which is 0 for an item with no stock, so a 275 × 10 line shows 2,750
-   profit instead of 550. For sourcing lines, set `valuation_rate` from
-   `estimated_landed_cost` (× conversion factor, in company currency) and recompute
-   `gross_profit` in the validate hook. Check in the v14 source where selling
-   controllers compute `gross_profit` so the value is not overwritten afterwards.
-4. Back-to-back PO: the client's PO has a mandatory custom header field
-   `expected_delivery_date` (also `production_end_date`, `custom_pi_date` are mandatory
-   there). When `Purchase Order` has `expected_delivery_date`, set it from the offer
-   (today + lead time) or the schedule date; also set the line `expected_delivery_date`.
-   Do not fill the other client fields.
-5. Back-to-Back Tracker: put Stage, Days Late, Expected Arrival and Purchase Order right
-   after Sales Order; move Item Name / Customer Name further right. The important columns
-   are cut off at normal screen width today.
-6. Back-to-Back Order Cost: the Sales Order row showed Ordered Qty 10 while its only PO
-   child row is a Draft with Ordered Qty 0. Make the parent consistent with the children:
-   count submitted PO quantity only, and show draft PO quantity in its own column.
+Planning still excludes back-to-back: SO lines with a PO line against them, those PO lines,
+and Back-to-Back Material Requests.
 
-Open questions for the client (no code yet): should back-to-back Material Requests go
-through the normal MR approval workflow (it delays asking suppliers), and may sales users
-see supplier names and costs in the Supplier Offers dialog (today they can).
+Open question for the client: may back-to-back PO lines be drawn from a supplier's Blanket
+Order (today they are, when the item is in one).
 
-Notes on the fixes:
-- Fix 3: `valuation_rate` is per stock UOM (gross_profit = (stock_uom_rate -
+Notes (phase 1 fixes and the first VM test, still valid):
+- Gross profit: `valuation_rate` is per stock UOM (gross_profit = (stock_uom_rate -
   valuation_rate) x stock_qty), so it is set to `estimated_landed_cost` without the
-  conversion factor. Sales Order also got a `validate` hook. Documents saved before the
-  fix keep the old gross profit until saved again (submitted ones stay as they are).
-- Fix 4: the header date is the latest line date.
+  conversion factor (`back_to_back.set_sourcing_valuation`, Quotation and Sales Order
+  validate hooks, after SellingController.validate).
+- PO header `expected_delivery_date` is the latest line date.
 - Phase 1 fix 2: the deduction applies to submitted, not-ordered Purchase MRs except
   Back-to-Back ones; draft MRs are not deducted. Only MRs dated within settings
   `pending_mr_max_age_days` (default 90, 0 = no limit) of the analysis date count: on the
@@ -185,8 +186,8 @@ with `blanket_order` set); new-line detection relies on `__islocal`, which Frapp
 the row is written. Open question: back-to-back PO lines (sales_order set) are linked to the
 supplier's agreement too; the user decides whether to skip them.
 
-Next: user re-tests on the VM (`bench migrate` for the new run field and JSON changes,
-`bench build --app procurement_planning`, `bench restart`).
+Next: user tests the redesigned flow on the VM (see the test script in the README section
+"Back-to-back purchasing"); old back-to-back test data need not be migrated.
 
 ## Phase 3 – later
 
