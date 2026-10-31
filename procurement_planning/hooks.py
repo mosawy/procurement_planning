@@ -184,6 +184,11 @@ doc_events = {
 # override_whitelisted_methods = {
 # 	"frappe.desk.doctype.event.event.get_events": "procurement_planning.event.get_events"
 # }
+
+override_whitelisted_methods = {
+	# Strips the cost (permlevel 1) from the Sales Order sent to the browser.
+	"erpnext.selling.doctype.quotation.quotation.make_sales_order": "procurement_planning.planning.back_to_back.make_sales_order",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,

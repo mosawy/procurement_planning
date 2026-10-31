@@ -539,7 +539,41 @@ def clear_foreign_sourcing(doc):
 
 
 def validate_sales_order(doc, method=None):
+	if doc.docstatus == 0:
+		copy_cost_from_quotation(doc)
 	set_sourcing_valuation(doc)
+
+
+@frappe.whitelist()
+def make_sales_order(source_name, target_doc=None):
+	"""Standard Quotation -> Sales Order mapping, without the fields the user may
+	not read (permlevel 1: cost, valuation rate, gross profit). The mapper
+	copies them all and the unsaved order goes to the browser as it is; the
+	saved order takes the cost from the Quotation again (copy_cost_from_quotation)."""
+	from erpnext.selling.doctype.quotation.quotation import make_sales_order as standard_make_sales_order
+
+	doc = standard_make_sales_order(source_name, target_doc)
+	doc.apply_fieldlevel_read_permissions()
+	return doc
+
+
+def copy_cost_from_quotation(doc):
+	"""Cost of sourced Sales Order lines from their Quotation lines, read on the
+	server: the browser does not get it (permlevel 1) and cannot set it."""
+	quotation_items = [d.quotation_item for d in doc.items if d.get("needs_sourcing") and d.get("quotation_item")]
+	if not quotation_items:
+		return
+	costs = dict(
+		frappe.get_all(
+			"Quotation Item",
+			filters={"name": ("in", quotation_items)},
+			fields=["name", "estimated_landed_cost"],
+			as_list=True,
+		)
+	)
+	for d in doc.items:
+		if d.get("needs_sourcing") and d.get("quotation_item") in costs:
+			d.estimated_landed_cost = flt(costs[d.quotation_item])
 
 
 def set_sourcing_valuation(doc):
