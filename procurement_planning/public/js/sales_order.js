@@ -17,14 +17,17 @@ frappe.ui.form.on("Sales Order", {
 		}
 
 		if (frm.doc.docstatus === 1) {
-			frm.add_custom_button(
-				__("Order Cost"),
-				() => frappe.set_route("query-report", "Back-to-Back Order Cost", { sales_order: frm.doc.name }),
-				group
-			);
+			// Order Cost shows buying cost: only for users the report is open to.
+			if ((frappe.boot.user.all_reports || {})["Back-to-Back Order Cost"]) {
+				frm.add_custom_button(
+					__("Order Cost"),
+					() => frappe.set_route("query-report", "Back-to-Back Order Cost", { sales_order: frm.doc.name }),
+					group
+				);
+			}
 			frm.add_custom_button(
 				__("Tracker"),
-				() => frappe.set_route("query-report", "Back-to-Back Tracker", { sales_order: frm.doc.name }),
+				() => frappe.set_route("query-report", "Back-to-Back Sales Tracker", { sales_order: frm.doc.name }),
 				group
 			);
 		}

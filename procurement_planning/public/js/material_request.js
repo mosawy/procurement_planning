@@ -8,6 +8,11 @@ frappe.ui.form.on("Material Request", {
 	refresh(frm) {
 		const doc = frm.doc;
 		if (doc.docstatus !== 1 || doc.procurement_type !== "Back-to-Back") return;
+		frm.add_custom_button(
+			__("Back-to-Back Purchase Tracker"),
+			() => frappe.set_route("query-report", "Back-to-Back Purchase Tracker", { material_request: doc.name }),
+			__("View")
+		);
 		if (["Stopped", "Closed", "Ordered"].includes(doc.status)) return;
 		frm.add_custom_button(
 			__("Back-to-Back Purchase Orders"),

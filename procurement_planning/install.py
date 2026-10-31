@@ -324,6 +324,9 @@ OBSOLETE_FIELDS = {
 	"Material Request Item": ["sales_quotation", "quotation_item"],
 }
 
+# Reports replaced by the sales / purchasing split.
+OBSOLETE_REPORTS = ["Back-to-Back Tracker"]
+
 # Standard fields that reveal the buying cost on sales documents: on permlevel 1,
 # so only roles given level 1 on Quotation / Sales Order see them.
 COST_FIELDS = {
@@ -342,6 +345,7 @@ def after_migrate():
 
 def make_custom_fields():
 	remove_obsolete_fields()
+	remove_obsolete_reports()
 	create_custom_fields(CUSTOM_FIELDS, update=True)
 	make_property_setters()
 
@@ -358,6 +362,19 @@ def remove_obsolete_fields():
 			if not standard and frappe.db.has_column(doctype, fieldname):
 				frappe.db.sql_ddl(f"alter table `tab{doctype}` drop column `{fieldname}`")
 		frappe.clear_cache(doctype=doctype)
+
+
+def remove_obsolete_reports():
+	for name in OBSOLETE_REPORTS:
+		if not frappe.db.exists("Report", {"name": name, "module": "Procurement Planning"}):
+			continue
+		# Report.on_trash refuses a standard report outside developer mode unless in a patch.
+		in_patch = frappe.flags.in_patch
+		frappe.flags.in_patch = True
+		try:
+			frappe.delete_doc("Report", name, ignore_permissions=True, force=True)
+		finally:
+			frappe.flags.in_patch = in_patch
 
 
 def make_property_setters():

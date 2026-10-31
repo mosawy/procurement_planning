@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Golive-Solutions and contributors
 // For license information, please see license.txt
 
-frappe.query_reports["Back-to-Back Tracker"] = {
+frappe.query_reports["Back-to-Back Sales Tracker"] = {
 	filters: [
 		{
 			fieldname: "company",
@@ -19,12 +19,7 @@ frappe.query_reports["Back-to-Back Tracker"] = {
 			get_query: () => ({ filters: { docstatus: 1 } }),
 		},
 		{ fieldname: "customer", label: __("Customer"), fieldtype: "Link", options: "Customer" },
-		{
-			fieldname: "priority",
-			label: __("Priority"),
-			fieldtype: "Select",
-			options: ["", "Urgent", "Normal", "Flexible"],
-		},
+		{ fieldname: "priority", label: __("Priority"), fieldtype: "Select", options: ["", "Urgent", "Normal", "Flexible"] },
 		{
 			fieldname: "stage",
 			label: __("Stage"),

@@ -20,6 +20,7 @@ from procurement_planning.planning.b2b_calculations import (
 	margin_percent,
 	offer_lead_time,
 	promised_date,
+	purchase_progress,
 	purchase_line_cost,
 	purchase_order_split,
 	purchase_quantity,
@@ -213,3 +214,39 @@ class TestSourcingRequest(unittest.TestCase):
 		self.assertEqual(sourcing_request_status(0, 2, 2), "Ready")
 		self.assertEqual(sourcing_request_status(1, 2, 2), "Submitted")
 		self.assertEqual(sourcing_request_status(2, 2, 2), "Cancelled")
+
+
+class TestPurchaseProgress(unittest.TestCase):
+	today = date(2026, 11, 1)
+
+	def test_not_ordered_is_late_from_today(self):
+		result = purchase_progress([], 10, self.today, date(2026, 10, 28))
+		self.assertEqual(result["stage"], "Not Ordered")
+		self.assertEqual(result["days_late"], 4)
+
+	def test_draft_po_counts_nothing(self):
+		draft = {"docstatus": 0, "stock_qty": 10, "received_qty": 0, "shipped_qty": 0}
+		result = purchase_progress([draft], 10, self.today, date(2026, 12, 1))
+		self.assertEqual((result["stage"], result["ordered_qty"]), ("PO Draft", 0))
+		self.assertEqual(result["days_late"], -30)
+
+	def test_shipped_uses_arrival_date(self):
+		po = {
+			"docstatus": 1,
+			"stock_qty": 10,
+			"received_qty": 0,
+			"shipped_qty": 10,
+			"arrival_date": date(2026, 11, 20),
+			"expected_date": date(2026, 11, 10),
+		}
+		result = purchase_progress([po], 10, self.today, date(2026, 11, 15))
+		self.assertEqual(result["stage"], "Shipped")
+		self.assertEqual(result["expected_arrival"], date(2026, 11, 20))
+		self.assertEqual(result["days_late"], 5)
+
+	def test_received_has_no_days_late(self):
+		po = {"docstatus": 1, "stock_qty": 10, "received_qty": 10, "shipped_qty": 0}
+		result = purchase_progress([po], 10, self.today, date(2026, 10, 1))
+		self.assertEqual(result["stage"], "Received")
+		self.assertIsNone(result["days_late"])
+		self.assertEqual(purchase_progress([po], 10, self.today, delivered_qty=10)["stage"], "Delivered")

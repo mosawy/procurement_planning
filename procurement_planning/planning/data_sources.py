@@ -728,15 +728,21 @@ def get_back_to_back_sales_order_lines(filters):
 	return [row for row in rows if row.sales_order in allowed]
 
 
-def get_back_to_back_purchase_lines(sales_order_items):
-	"""Purchase Order lines (draft and submitted) raised against Sales Order lines,
-	in stock UOM, with their receipts at valuation (which includes Landed Cost
-	Vouchers) and, when shipments are tracked, shipped quantity and arrival date.
+PURCHASE_LINE_KEYS = ("sales_order_item", "material_request_item")
 
-	{sales_order_item: [rows]}.
+
+def get_back_to_back_purchase_lines(keys, key_field="sales_order_item"):
+	"""Purchase Order lines (draft and submitted) raised against Sales Order
+	lines (or Material Request lines), in stock UOM, with their receipts at
+	valuation (which includes Landed Cost Vouchers) and, when shipments are
+	tracked, shipped quantity and arrival date.
+
+	{key: [rows]}, key being the PO line's key_field.
 	"""
-	if not sales_order_items:
+	if not keys:
 		return {}
+	if key_field not in PURCHASE_LINE_KEYS:
+		frappe.throw(_("Invalid key {0}").format(key_field))
 
 	shipments = has_shipment_tracking()
 	shipment_columns = (
@@ -760,7 +766,7 @@ def get_back_to_back_purchase_lines(sales_order_items):
 		f"""
 		select
 			poi.name, poi.parent as purchase_order, po.docstatus, po.status, po.supplier,
-			po.supplier_name, po.currency, poi.sales_order_item, poi.item_code,
+			po.supplier_name, po.currency, poi.{key_field} as line_key, poi.item_code,
 			poi.stock_qty, poi.received_qty * poi.conversion_factor as received_qty,
 			poi.base_net_rate / poi.conversion_factor as base_unit_rate,
 			coalesce(poi.expected_delivery_date, poi.schedule_date) as expected_date,
@@ -778,19 +784,66 @@ def get_back_to_back_purchase_lines(sales_order_items):
 			inner join `tabPurchase Receipt` pr on pr.name = pri.parent
 			where pr.docstatus = 1 and pri.purchase_order_item in (
 				select linked.name from `tabPurchase Order Item` linked
-				where linked.sales_order_item in %(items)s
+				where linked.{key_field} in %(items)s
 			)
 			group by pri.purchase_order_item
 		) pr on pr.purchase_order_item = poi.name
 		{shipment_join}
-		where poi.sales_order_item in %(items)s and po.docstatus < 2
+		where poi.{key_field} in %(items)s and po.docstatus < 2
 		order by po.transaction_date, po.name, poi.idx
 		""",
-		{"items": list(sales_order_items)},
+		{"items": list(keys)},
 		as_dict=True,
 	)
 
 	result = {}
 	for row in rows:
-		result.setdefault(row.sales_order_item, []).append(row)
+		result.setdefault(row.line_key, []).append(row)
 	return result
+
+
+def get_back_to_back_request_lines(filters):
+	"""Lines of Back-to-Back Purchase Material Requests (draft and submitted),
+	limited to Material Requests the user may read. No customer or selling data.
+
+	filters: company, material_request, sourcing_request, from_date, to_date.
+	"""
+	conditions = [
+		"mr.docstatus < 2",
+		"mr.company = %(company)s",
+		"mr.material_request_type = 'Purchase'",
+		"mr.procurement_type = 'Back-to-Back'",
+	]
+	if filters.get("material_request"):
+		conditions.append("mr.name = %(material_request)s")
+	if filters.get("sourcing_request"):
+		conditions.append("mri.sourcing_request = %(sourcing_request)s")
+	if filters.get("from_date"):
+		conditions.append("mr.transaction_date >= %(from_date)s")
+	if filters.get("to_date"):
+		conditions.append("mr.transaction_date <= %(to_date)s")
+
+	rows = frappe.db.sql(
+		f"""
+		select
+			mri.name, mri.parent as material_request, mri.idx, mr.docstatus as mr_docstatus,
+			mr.status as mr_status, mr.transaction_date, mri.item_code, mri.item_name,
+			mri.stock_uom, mri.stock_qty, mri.schedule_date, mri.sourcing_request,
+			mri.sourcing_request_item, sr.priority
+		from `tabMaterial Request Item` mri
+		inner join `tabMaterial Request` mr on mr.name = mri.parent
+		left join `tabSourcing Request` sr on sr.name = mri.sourcing_request
+		where {" and ".join(conditions)}
+		order by mr.transaction_date, mr.name, mri.idx
+		""",
+		filters,
+		as_dict=True,
+	)
+
+	names = list({row.material_request for row in rows})
+	if not names:
+		return []
+	allowed = set(
+		frappe.get_list("Material Request", filters={"name": ["in", names]}, pluck="name", limit_page_length=0)
+	)
+	return [row for row in rows if row.material_request in allowed]

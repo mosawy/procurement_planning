@@ -9,7 +9,7 @@
  "filters": [],
  "idx": 0,
  "is_standard": "Yes",
- "modified": "2026-10-29 12:00:00.000000",
+ "modified": "2026-10-31 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Back-to-Back Order Cost",
@@ -21,18 +21,6 @@
  "roles": [
   {
    "role": "System Manager"
-  },
-  {
-   "role": "Sales Manager"
-  },
-  {
-   "role": "Sales User"
-  },
-  {
-   "role": "Purchase Manager"
-  },
-  {
-   "role": "Purchase User"
   }
  ]
 }

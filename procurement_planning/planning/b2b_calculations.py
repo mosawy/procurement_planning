@@ -259,3 +259,54 @@ def line_gross_profit(base_rate, conversion_factor, valuation_rate, stock_qty):
 	"""Gross profit of a selling line in company currency: (rate per stock UOM -
 	valuation rate per stock UOM) x stock qty."""
 	return ((base_rate or 0) / (conversion_factor or 1) - (valuation_rate or 0)) * (stock_qty or 0)
+
+
+DONE_STAGES = ("Received", "Delivered")
+
+
+def purchase_progress(po_lines, required_qty, on_date, target_date=None, delivered_qty=0):
+	"""Where a back-to-back line stands from its Purchase Order lines.
+
+	po_lines: dicts with docstatus, stock_qty, received_qty, shipped_qty (stock
+	UOM), arrival_date (shipment) and expected_date (PO), dates as date objects.
+	Only submitted lines count as ordered; a draft one shows as PO Draft. The
+	expected arrival is the latest of the open part: shipment arrival for
+	shipped quantity, else the PO date. Days late compare it (never before
+	today) with target_date, until the goods are in.
+	"""
+	submitted = [po for po in po_lines if po.get("docstatus") == 1]
+	ordered = sum(po.get("stock_qty") or 0 for po in submitted)
+	received = sum(po.get("received_qty") or 0 for po in submitted)
+	shipped = max(sum(po.get("shipped_qty") or 0 for po in submitted), received)
+	stage = back_to_back_stage(
+		ordered,
+		shipped,
+		received,
+		delivered_qty or 0,
+		required_qty,
+		has_draft_po=any(po.get("docstatus") == 0 for po in po_lines),
+	)
+
+	dates = []
+	for po in submitted:
+		open_qty = (po.get("stock_qty") or 0) - (po.get("received_qty") or 0)
+		if open_qty <= 0:
+			continue
+		if po.get("arrival_date") and (po.get("shipped_qty") or 0) > (po.get("received_qty") or 0):
+			dates.append(po["arrival_date"])
+		if (po.get("shipped_qty") or 0) < (po.get("stock_qty") or 0) and po.get("expected_date"):
+			dates.append(po["expected_date"])
+	expected = max(dates) if dates else None
+
+	late = None
+	if stage not in DONE_STAGES:
+		late = days_late(max(expected or on_date, on_date), target_date)
+
+	return {
+		"stage": stage,
+		"ordered_qty": ordered,
+		"shipped_qty": shipped,
+		"received_qty": received,
+		"expected_arrival": expected,
+		"days_late": late,
+	}
