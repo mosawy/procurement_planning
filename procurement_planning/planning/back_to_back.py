@@ -17,6 +17,7 @@ Documents of the other department are created as a system action
 
 import frappe
 from frappe import _
+from frappe.desk.doctype.notification_log.notification_log import make_notification_logs
 from frappe.utils import add_days, cint, flt, formatdate, getdate, today
 
 from procurement_planning.planning.b2b_calculations import (
@@ -29,6 +30,7 @@ from procurement_planning.planning.b2b_calculations import (
 	offer_lead_time,
 	quotation_rate,
 	sourced_qty_change,
+	sourcing_rates,
 	sourcing_status,
 )
 from procurement_planning.planning.settings import get_company_settings
@@ -36,6 +38,271 @@ from procurement_planning.planning.settings import get_company_settings
 PROCUREMENT_TYPE = "Back-to-Back"
 OTHER_OFFERS_LIMIT = 20
 EXCESS_PRICING_OPTIONS = (EXCESS_CUSTOMER_BEARS, EXCESS_TO_STOCK)
+
+
+SOURCING_REQUEST = "Sourcing Request"
+
+
+# ---------------------------------------------------------------------------
+# Quotation -> Sourcing Request
+
+
+@frappe.whitelist()
+def request_sourcing(quotation, items=None):
+	"""Send draft Quotation lines to purchasing as a Sourcing Request.
+
+	items: Quotation Item names; empty means every line marked needs_sourcing.
+	Lines already on an active (not cancelled) Sourcing Request are skipped.
+	The Sourcing Request carries no customer and no selling rate; it is created
+	as a system action, since sales cannot read purchasing documents.
+	"""
+	doc = frappe.get_doc("Quotation", quotation)
+	doc.check_permission("write")
+	if doc.docstatus != 0:
+		frappe.throw(_("Quotation {0} is not a draft").format(doc.name))
+
+	selected = set(frappe.parse_json(items) or [])
+	lines = [d for d in doc.items if (d.name in selected if selected else d.needs_sourcing)]
+	if not lines:
+		frappe.throw(_("Select the items to source, or tick Needs Sourcing on them"))
+
+	active = active_sourcing_lines([d.name for d in lines])
+	new_lines = [d for d in lines if d.name not in active]
+	if not new_lines:
+		frappe.throw(_("The selected items are already with purchasing"))
+
+	settings = get_company_settings(doc.company)
+	request = frappe.new_doc(SOURCING_REQUEST)
+	request.update(
+		{
+			"company": doc.company,
+			"transaction_date": getdate(today()),
+			"required_by_date": doc.get("required_by_date"),
+			"priority": doc.get("priority"),
+			"margin_percent": settings.default_margin_percent,
+			"quotation": doc.name,
+		}
+	)
+	for line in new_lines:
+		request.append(
+			"items",
+			{
+				"item_code": line.item_code,
+				"item_name": line.item_name,
+				"description": line.description or line.item_name,
+				"qty": line.qty,
+				"uom": line.uom,
+				"conversion_factor": flt(line.conversion_factor) or 1,
+				"stock_qty": _stock_qty(line),
+				"stock_uom": line.stock_uom,
+				"quotation_item": line.name,
+			},
+		)
+	request.flags.ignore_permissions = True
+	request.insert()
+
+	request_lines = {d.quotation_item: d.name for d in request.items}
+	for line in lines:
+		line.needs_sourcing = 1
+		if line.name in request_lines:
+			line.update(dict(SOURCING_RESULT_FIELDS))
+			line.sourcing_request = request.name
+			line.sourcing_request_item = request_lines[line.name]
+	doc.save()
+	return {"sourcing_request": request.name, "lines": len(new_lines), "skipped": len(lines) - len(new_lines)}
+
+
+def active_sourcing_lines(quotation_items):
+	"""Quotation Item names on a Sourcing Request that is not cancelled."""
+	if not quotation_items:
+		return set()
+	return set(
+		frappe.get_all(
+			"Sourcing Request Item",
+			filters={"quotation_item": ("in", quotation_items), "docstatus": ("<", 2)},
+			pluck="quotation_item",
+		)
+	)
+
+
+# ---------------------------------------------------------------------------
+# Sourcing Request: evaluation and prices back to the Quotation
+
+OFFER_FIELDS = {
+	"supplier_quotation": None,
+	"supplier_quotation_item": None,
+	"supplier": None,
+	"supplier_rate": 0,
+	"lead_time_days": 0,
+	"min_order_qty": 0,
+	"valid_till": None,
+	"purchase_qty": 0,
+	"excess_qty": 0,
+	"landed_cost": 0,
+	"pricing_cost": 0,
+	"suggested_rate": 0,
+	"minimum_rate": 0,
+	"promised_date": None,
+}
+
+
+def evaluate_sourcing_line(request, line, settings, company_currency, on_date):
+	"""Re-read the line's chosen offer and set its cost, quantities, rates and promise."""
+	line.stock_qty = flt(line.qty) * (flt(line.conversion_factor) or 1)
+	if not line.supplier_quotation_item:
+		line.update(OFFER_FIELDS)
+		return
+
+	rows = _offer_rows(["sqi.name = %(name)s"], {"name": line.supplier_quotation_item})
+	if not rows:
+		frappe.throw(_("Row {0}: the supplier offer is not submitted any more").format(line.idx))
+	row = rows[0]
+	if row.item_code != line.item_code:
+		frappe.throw(_("Row {0}: the supplier offer is for item {1}").format(line.idx, row.item_code))
+	if row.company != request.company:
+		frappe.throw(_("Row {0}: the supplier offer belongs to another company").format(line.idx))
+
+	pricing = line.excess_pricing or EXCESS_TO_STOCK
+	offer = _evaluate(row, line.stock_qty, on_date, settings, company_currency, pricing)
+	suggested, minimum = sourcing_rates(
+		offer["customer_unit_cost"], request.margin_percent, settings.minimum_margin_percent
+	)
+	line.update(
+		{
+			"supplier_quotation": row.supplier_quotation,
+			"supplier": row.supplier,
+			"supplier_rate": offer["unit_cost"],
+			"lead_time_days": offer["lead_time_days"] or 0,
+			"min_order_qty": offer["min_order_qty"],
+			"valid_till": offer["valid_till"],
+			"purchase_qty": offer["purchase_qty"],
+			"excess_qty": offer["excess_qty"],
+			"excess_pricing": pricing,
+			"landed_cost": offer["landed_cost"],
+			"pricing_cost": offer["customer_unit_cost"],
+			"suggested_rate": suggested,
+			"minimum_rate": minimum,
+			"promised_date": offer["promised_date"],
+		}
+	)
+
+
+def return_prices_to_quotation(request):
+	"""On submit of a Sourcing Request: write price, promise and cost to the
+	Quotation lines and tell the Quotation owner.
+
+	Written straight to the database: purchasing cannot write Quotations, and
+	the Quotation's modified time moves on, so a form open with old values must
+	reload before it can save.
+	"""
+	quotation = _draft_quotation(request)
+	if not quotation:
+		return
+
+	lines = {d.name: d for d in quotation.items}
+	conversion_rate = flt(quotation.conversion_rate) or 1
+	missing = []
+	for item in request.items:
+		line = lines.get(item.quotation_item)
+		if not line:
+			missing.append(str(item.idx))
+			continue
+		factor = flt(line.conversion_factor) or 1
+		values = {
+			"needs_sourcing": 1,
+			"suggested_rate": flt(item.suggested_rate) * factor / conversion_rate,
+			"minimum_rate": flt(item.minimum_rate) * factor / conversion_rate,
+			"promised_date": item.promised_date,
+			"quote_valid_till": item.valid_till,
+			"sourced_stock_qty": flt(item.stock_qty),
+			"sourced_qty_locked": int(item.excess_pricing == EXCESS_CUSTOMER_BEARS and flt(item.excess_qty) > 0),
+			"estimated_landed_cost": flt(item.pricing_cost),
+			"sourcing_request": request.name,
+			"sourcing_request_item": item.name,
+			"valuation_rate": flt(item.pricing_cost),
+			"gross_profit": flt(
+				line_gross_profit(line.base_rate, line.conversion_factor, flt(item.pricing_cost), line.stock_qty),
+				quotation.precision("amount", line),
+			),
+		}
+		line.update(values)
+		frappe.db.set_value("Quotation Item", line.name, values, update_modified=False)
+
+	quotation.db_set("sourcing_status", sourcing_status([d.as_dict() for d in quotation.items]))
+	if missing:
+		frappe.msgprint(
+			_("Rows {0} are no longer on Quotation {1}; their prices were not returned.").format(
+				", ".join(missing), quotation.name
+			),
+			indicator="orange",
+		)
+	_notify_owner(
+		quotation,
+		_("Prices for {0} item(s) of {1} are ready").format(len(request.items) - len(missing), quotation.name),
+	)
+
+
+def clear_prices_on_quotation(request):
+	"""On cancel of a Sourcing Request: take its prices off the draft Quotation."""
+	quotation = _draft_quotation(request, quiet=True)
+	if not quotation:
+		return
+	changed = False
+	for line in quotation.items:
+		if line.get("sourcing_request") == request.name:
+			values = dict(SOURCING_RESULT_FIELDS, **SOURCING_LINK_FIELDS)
+			line.update(values)
+			frappe.db.set_value("Quotation Item", line.name, values, update_modified=False)
+			changed = True
+	if changed:
+		quotation.db_set("sourcing_status", sourcing_status([d.as_dict() for d in quotation.items]))
+
+
+def check_quotation_before_cancel(request):
+	"""A submitted Quotation priced from this request keeps it."""
+	if not request.quotation:
+		return
+	quotation = frappe.db.get_value("Quotation", request.quotation, "docstatus")
+	if quotation == 1 and frappe.db.exists(
+		"Quotation Item", {"parent": request.quotation, "sourcing_request": request.name}
+	):
+		frappe.throw(
+			_("Quotation {0} is submitted with these prices. It has to be cancelled first.").format(
+				request.quotation
+			)
+		)
+
+
+def _draft_quotation(request, quiet=False):
+	if not request.quotation or not frappe.db.exists("Quotation", request.quotation):
+		return None
+	quotation = frappe.get_doc("Quotation", request.quotation)
+	if quotation.docstatus != 0:
+		if not quiet:
+			frappe.msgprint(
+				_("Quotation {0} is no longer a draft; the prices were not written to it.").format(quotation.name),
+				indicator="orange",
+			)
+		return None
+	return quotation
+
+
+def _notify_owner(quotation, subject):
+	email = frappe.db.get_value("User", quotation.owner, "email")
+	if not email:
+		return
+	make_notification_logs(
+		frappe._dict(
+			{
+				"type": "Alert",
+				"document_type": "Quotation",
+				"document_name": quotation.name,
+				"subject": subject,
+				"from_user": frappe.session.user,
+			}
+		),
+		[email],
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +329,7 @@ def _offer_rows(conditions, values, limit=None):
 			sqi.uom, sqi.conversion_factor, sqi.qty, sqi.lead_time_days,
 			sqi.expected_delivery_date, ifnull(sqi.min_order_qty, 0) as min_order_qty,
 			sqi.sourcing_request, sqi.sourcing_request_item,
-			sq.supplier, sq.supplier_name, sq.currency, sq.transaction_date, sq.valid_till,
+			sq.supplier, sq.supplier_name, sq.currency, sq.transaction_date, sq.valid_till, sq.company,
 			sup.landed_cost_percent
 		from `tabSupplier Quotation Item` sqi
 		inner join `tabSupplier Quotation` sq on sq.name = sqi.parent

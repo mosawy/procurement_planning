@@ -103,10 +103,11 @@
    "reqd": 1
   }
  ],
+ "in_create": 1,
  "index_web_pages_for_search": 0,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-31 11:00:00.000000",
+ "modified": "2026-10-31 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Procurement Planning",
  "name": "Sourcing Request",
