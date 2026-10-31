@@ -11,6 +11,11 @@
 		wrapper.procurement_planning = new ProcurementPlanning(page);
 	};
 
+	// Opened from a dashboard: frappe.route_options carries the filters to apply.
+	frappe.pages["procurement-planning"].on_page_show = function (wrapper) {
+		if (wrapper.procurement_planning) wrapper.procurement_planning.apply_route_options();
+	};
+
 	const API = "procurement_planning.planning.api";
 	const PAGE_SIZES = [25, 50, 100];
 	const ABC_CLASSES = ["A", "B", "C", "D", "E", "F", "Non-Moving"];
@@ -90,6 +95,40 @@
 			this.page.add_inner_button(__("Settings"), () => this.open_settings());
 			this.page.add_inner_button(__("Parameter Runs"), () => frappe.set_route("List", "Reorder Parameter Run"));
 			this.page.add_inner_button(__("Lead Time Profiles"), () => frappe.set_route("List", "Lead Time Profile"));
+		}
+
+		// route_options: company, analysis_date (run the analysis), then the table
+		// filters search, card, risk, supplier ("__none__" = no supplier), abc_class,
+		// missing_lead_time.
+		apply_route_options() {
+			const options = frappe.route_options;
+			if (!options || !options.company) return;
+			frappe.route_options = null;
+			this.filters.company.set_value(options.company);
+			if (options.analysis_date) this.filters.analysis_date.set_value(options.analysis_date);
+			this.pending_state = {
+				search: (options.search || "").toLowerCase(),
+				card: options.card || "all",
+				risk: options.risk || "",
+				supplier: options.supplier || "",
+				abc_class: options.abc_class || "",
+				missing_lead_time: Boolean(options.missing_lead_time),
+			};
+			// set_value is asynchronous; run once the controls hold the new values
+			setTimeout(() => this.run(), 300);
+		}
+
+		apply_pending_state() {
+			const state = this.pending_state;
+			if (!state) return;
+			this.pending_state = null;
+			const $b = this.$body;
+			$b.find(".pp-search").val(state.search);
+			$b.find(".pp-risk").val(state.risk);
+			$b.find(".pp-abc").val(state.abc_class);
+			$b.find(".pp-supplier").val(state.supplier);
+			$b.find(".pp-missing-lead-time").prop("checked", state.missing_lead_time);
+			this.update_state(state);
 		}
 
 		open_settings() {
@@ -302,6 +341,7 @@
 					this.selected = new Set();
 					this.render_supplier_options();
 					this.render_result();
+					this.apply_pending_state();
 				},
 			});
 		}

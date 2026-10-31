@@ -12,6 +12,10 @@ app_license = "MIT"
 # app_include_css = "/assets/procurement_planning/css/procurement_planning.css"
 # app_include_js = "/assets/procurement_planning/js/procurement_planning.js"
 
+# Shared look and helpers of the two purchasing dashboard pages.
+app_include_css = "/assets/procurement_planning/css/purchasing_dashboards.css"
+app_include_js = "/assets/procurement_planning/js/purchasing_dashboards.js"
+
 # include js, css files in header of web template
 # web_include_css = "/assets/procurement_planning/css/procurement_planning.css"
 # web_include_js = "/assets/procurement_planning/js/procurement_planning.js"
