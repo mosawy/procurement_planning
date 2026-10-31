@@ -29,6 +29,7 @@ from procurement_planning.planning.b2b_calculations import (
 	line_gross_profit,
 	offer_lead_time,
 	quotation_rate,
+	rank_offers,
 	sourced_qty_change,
 	sourcing_rates,
 	sourcing_status,
@@ -38,8 +39,6 @@ from procurement_planning.planning.settings import get_company_settings
 PROCUREMENT_TYPE = "Back-to-Back"
 OTHER_OFFERS_LIMIT = 20
 EXCESS_PRICING_OPTIONS = (EXCESS_CUSTOMER_BEARS, EXCESS_TO_STOCK)
-
-
 SOURCING_REQUEST = "Sourcing Request"
 
 
@@ -309,6 +308,113 @@ def _notify_owner(quotation, subject):
 # Supplier offers
 
 
+@frappe.whitelist()
+def get_supplier_offers(sourcing_request, excess_pricing=None):
+	"""Ranked supplier offers for every line of a Sourcing Request.
+
+	Offers are submitted Supplier Quotation Items made for the line (through an
+	RFQ from this request or one it amends), plus other valid offers for the
+	same item. excess_pricing: {line name: option} to evaluate with; else the
+	line's own choice.
+	"""
+	doc = frappe.get_doc(SOURCING_REQUEST, sourcing_request)
+	doc.check_permission("read")
+	excess_pricing = frappe.parse_json(excess_pricing) or {}
+
+	settings = get_company_settings(doc.company)
+	company_currency = frappe.get_cached_value("Company", doc.company, "default_currency")
+	on_date = getdate(today())
+	linked = _linked_offers(doc)
+
+	result = []
+	for line in doc.items:
+		required = flt(line.qty) * (flt(line.conversion_factor) or 1)
+		pricing = excess_pricing.get(line.name) or line.excess_pricing or EXCESS_TO_STOCK
+		line_linked = {row.name: row for row in linked.get(line.quotation_item or line.name, [])}
+		raw = {row.name: row for row in _other_offers(doc.company, line.item_code, on_date)}
+		raw.update(line_linked)
+		if line.supplier_quotation_item and line.supplier_quotation_item not in raw:
+			for row in _offer_rows(["sqi.name = %(name)s"], {"name": line.supplier_quotation_item}):
+				raw[row.name] = row
+
+		offers = []
+		for name, row in raw.items():
+			offer = _evaluate(row, required, on_date, settings, company_currency, pricing, linked=name in line_linked)
+			offer["suggested_rate"], offer["minimum_rate"] = sourcing_rates(
+				offer["customer_unit_cost"], doc.margin_percent, settings.minimum_margin_percent
+			)
+			offers.append(offer)
+		result.append(
+			{
+				"name": line.name,
+				"idx": line.idx,
+				"item_code": line.item_code,
+				"item_name": line.item_name,
+				"qty": line.qty,
+				"uom": line.uom,
+				"stock_qty": required,
+				"stock_uom": line.stock_uom,
+				"excess_pricing": pricing,
+				"selected": line.supplier_quotation_item,
+				"offers": rank_offers(offers, doc.priority),
+			}
+		)
+
+	return {
+		"sourcing_request": doc.name,
+		"company_currency": company_currency,
+		"priority": doc.priority,
+		"margin_percent": doc.margin_percent,
+		"docstatus": doc.docstatus,
+		"lines": result,
+	}
+
+
+@frappe.whitelist()
+def select_offers(sourcing_request, selections):
+	"""Set the chosen offer and excess pricing of draft Sourcing Request lines.
+
+	selections: [{name, supplier_quotation_item, excess_pricing}]; an empty
+	supplier_quotation_item clears the line. Saving re-reads and prices the offers.
+	"""
+	doc = frappe.get_doc(SOURCING_REQUEST, sourcing_request)
+	doc.check_permission("write")
+	if doc.docstatus != 0:
+		frappe.throw(_("Sourcing Request {0} is not a draft").format(doc.name))
+
+	lines = {d.name: d for d in doc.items}
+	for selection in frappe.parse_json(selections) or []:
+		selection = frappe._dict(selection)
+		line = lines.get(selection.name)
+		if not line:
+			frappe.throw(_("Line {0} is not in Sourcing Request {1}").format(selection.name, doc.name))
+		pricing = selection.excess_pricing or EXCESS_TO_STOCK
+		if pricing not in EXCESS_PRICING_OPTIONS:
+			frappe.throw(_("Row {0}: invalid excess pricing {1}").format(line.idx, pricing))
+		line.supplier_quotation_item = selection.supplier_quotation_item or None
+		line.excess_pricing = pricing
+
+	doc.save()
+	return {"status": doc.status}
+
+
+def _linked_offers(request):
+	"""{quotation_item (or line name): [offer rows]} made for the request's lines,
+	through the Sourcing Request line their RFQ was made from. Matching on the
+	quotation line keeps offers made for a cancelled request it amends."""
+	keys = [d.quotation_item or d.name for d in request.items]
+	rows = _offer_rows(
+		["(sri.quotation_item in %(keys)s or sri.name in %(keys)s)"],
+		{"keys": keys},
+		join="inner join `tabSourcing Request Item` sri on sri.name = sqi.sourcing_request_item",
+		extra_columns=", sri.quotation_item as sourcing_key, sri.name as sourcing_line",
+	)
+	result = {}
+	for row in rows:
+		result.setdefault(row.sourcing_key or row.sourcing_line, []).append(row)
+	return result
+
+
 def _other_offers(company, item_code, on_date):
 	return _offer_rows(
 		[
@@ -321,7 +427,7 @@ def _other_offers(company, item_code, on_date):
 	)
 
 
-def _offer_rows(conditions, values, limit=None):
+def _offer_rows(conditions, values, limit=None, join="", extra_columns=""):
 	return frappe.db.sql(
 		f"""
 		select
@@ -330,10 +436,11 @@ def _offer_rows(conditions, values, limit=None):
 			sqi.expected_delivery_date, ifnull(sqi.min_order_qty, 0) as min_order_qty,
 			sqi.sourcing_request, sqi.sourcing_request_item,
 			sq.supplier, sq.supplier_name, sq.currency, sq.transaction_date, sq.valid_till, sq.company,
-			sup.landed_cost_percent
+			sup.landed_cost_percent{extra_columns}
 		from `tabSupplier Quotation Item` sqi
 		inner join `tabSupplier Quotation` sq on sq.name = sqi.parent
 		left join `tabSupplier` sup on sup.name = sq.supplier
+		{join}
 		where sq.docstatus = 1 and {" and ".join(conditions)}
 		order by sq.transaction_date desc, sq.creation desc
 		{f"limit {int(limit)}" if limit else ""}
