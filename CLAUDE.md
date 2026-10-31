@@ -158,8 +158,8 @@ is deleted.
 Planning still excludes back-to-back: SO lines with a PO line against them, those PO lines,
 and Back-to-Back Material Requests.
 
-Open question for the client: may back-to-back PO lines be drawn from a supplier's Blanket
-Order (today they are, when the item is in one).
+Decided (2026-11-01): a back-to-back PO line is drawn from the supplier's Blanket Order when
+the item is in one (rare); the hook does not skip lines with `sales_order` set.
 
 Notes (phase 1 fixes and the first VM test, still valid):
 - Gross profit: `valuation_rate` is per stock UOM (gross_profit = (stock_uom_rate -
@@ -189,8 +189,8 @@ Review 2026-10-30 (checked against v14 source): the hook sizes a line by max(sto
 because ERPNext draws down by stock_qty but `validate_against_blanket_order` compares qty;
 it clears `blanket_order` on lines not Against Blanket Order (ERPNext counts any submitted line
 with `blanket_order` set); new-line detection relies on `__islocal`, which Frappe keeps until
-the row is written. Open question: back-to-back PO lines (sales_order set) are linked to the
-supplier's agreement too; the user decides whether to skip them.
+the row is written. Back-to-back PO lines (sales_order set) are linked to the supplier's
+agreement too, as decided by the user.
 
 VM test 2026-11-01: steps 1-9 of the README test script passed. Step 10 failed with
 "Duplicate row 3 with same Supplier Quotation Item" (excess row carried the item link);
