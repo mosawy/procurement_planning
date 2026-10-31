@@ -28,6 +28,7 @@ from procurement_planning.planning.b2b_calculations import (
 	evaluate_offer,
 	line_gross_profit,
 	offer_lead_time,
+	purchase_order_split,
 	quotation_rate,
 	rank_offers,
 	sourced_qty_change,
@@ -650,7 +651,251 @@ def _stock_qty(line):
 
 
 # ---------------------------------------------------------------------------
-# Sales Order -> Purchase Orders
+# Sales Order -> Material Request -> Purchase Orders
+
+
+@frappe.whitelist()
+def request_purchase(sales_order):
+	"""Draft Back-to-Back Purchase Material Request for the sourced lines of a
+	submitted Sales Order: item, quantity, date, warehouse and the links to the
+	Sales Order and Sourcing Request lines; no customer and no selling rate.
+
+	Created as a system action and left in draft for the Material Request
+	approval workflow. Lines already on an active Material Request or a
+	Purchase Order are skipped.
+	"""
+	so = frappe.get_doc("Sales Order", sales_order)
+	so.check_permission("write")
+	if so.docstatus != 1:
+		frappe.throw(_("Submit Sales Order {0} first").format(so.name))
+	if so.status in ("Closed", "On Hold", "Completed"):
+		frappe.throw(_("Sales Order {0} is {1}").format(so.name, so.status))
+
+	settings = get_company_settings(so.company)
+	on_date = getdate(today())
+	requested = _requested_sales_order_items(so.name)
+	ordered = _ordered_sales_order_items(so.name)
+	skipped = []
+
+	request = frappe.new_doc("Material Request")
+	request.update(
+		{
+			"material_request_type": "Purchase",
+			"procurement_type": PROCUREMENT_TYPE,
+			"company": so.company,
+			"transaction_date": on_date,
+		}
+	)
+	for line in so.items:
+		if not line.get("needs_sourcing"):
+			continue
+		if not line.get("sourcing_request_item"):
+			skipped.append(_("Row {0}: no price from purchasing").format(line.idx))
+			continue
+		if line.name in requested:
+			skipped.append(_("Row {0}: already on Material Request {1}").format(line.idx, requested[line.name]))
+			continue
+		if line.name in ordered:
+			skipped.append(_("Row {0}: already on Purchase Order {1}").format(line.idx, ordered[line.name]))
+			continue
+
+		warehouse = line.warehouse or settings.default_purchase_warehouse
+		if not warehouse:
+			frappe.throw(
+				_(
+					"Row {0}: set a warehouse on the line, or a Default Purchase Warehouse in Procurement Planning Settings"
+				).format(line.idx)
+			)
+		request.append(
+			"items",
+			{
+				"item_code": line.item_code,
+				"item_name": line.item_name,
+				"description": line.description or line.item_name,
+				"qty": _stock_qty(line),
+				"uom": line.stock_uom,
+				"stock_uom": line.stock_uom,
+				"conversion_factor": 1,
+				"warehouse": warehouse,
+				"schedule_date": _schedule_date(line, settings, on_date),
+				"sales_order": so.name,
+				"sales_order_item": line.name,
+				"sourcing_request": line.sourcing_request,
+				"sourcing_request_item": line.sourcing_request_item,
+			},
+		)
+
+	if not request.get("items"):
+		frappe.throw(_("Nothing to request:") + "<br>" + "<br>".join(skipped) if skipped else _("No sourced line"))
+
+	request.schedule_date = min(d.schedule_date for d in request.items)
+	request.flags.ignore_permissions = True
+	request.insert()
+	if not so.get("is_back_to_back"):
+		so.db_set("is_back_to_back", 1)
+	return {"material_request": request.name, "lines": len(request.items), "skipped": skipped}
+
+
+@frappe.whitelist()
+def make_back_to_back_purchase_orders(material_request):
+	"""Draft Purchase Orders, one per supplier and currency, for a submitted
+	Back-to-Back Material Request, at the offers chosen on its Sourcing Requests.
+
+	The customer's quantity is linked to the Material Request and Sales Order
+	lines; a supplier minimum above it goes on a separate unlinked line into
+	stock. Lines fully ordered or already on a Purchase Order are skipped; an
+	expired offer is used with a warning.
+	"""
+	mr = frappe.get_doc("Material Request", material_request)
+	mr.check_permission("read")
+	if not frappe.has_permission("Purchase Order", "create"):
+		frappe.throw(_("Not permitted to create Purchase Orders"), frappe.PermissionError)
+	if mr.docstatus != 1 or mr.get("procurement_type") != PROCUREMENT_TYPE:
+		frappe.throw(_("Material Request {0} is not a submitted Back-to-Back request").format(mr.name))
+	if mr.status in ("Stopped", "Closed"):
+		frappe.throw(_("Material Request {0} is {1}").format(mr.name, mr.status))
+
+	settings = get_company_settings(mr.company)
+	on_date = getdate(today())
+	on_order = _material_request_lines_on_order(mr.name)
+	skipped, warnings, groups = [], [], {}
+
+	for line in mr.items:
+		remaining = flt(line.stock_qty) - flt(line.ordered_qty)
+		if remaining <= 1e-9:
+			continue
+		if line.name in on_order:
+			skipped.append(_("Row {0}: already on Purchase Order {1}").format(line.idx, on_order[line.name]))
+			continue
+		offer = _chosen_offer(line.get("sourcing_request_item"))
+		if not offer:
+			skipped.append(_("Row {0}: no submitted Sourcing Request with a supplier offer").format(line.idx))
+			continue
+		if offer.valid_till and getdate(offer.valid_till) < on_date:
+			warnings.append(
+				_("Row {0}: the offer of {1} expired on {2}; confirm the price with the supplier.").format(
+					line.idx, offer.supplier, formatdate(offer.valid_till)
+				)
+			)
+		groups.setdefault((offer.supplier, offer.currency), []).append((line, offer, remaining))
+
+	created = [
+		_make_purchase_order(mr, supplier, currency, entries, settings, on_date)
+		for (supplier, currency), entries in groups.items()
+	]
+	return {"purchase_orders": created, "skipped": skipped, "warnings": warnings}
+
+
+def _chosen_offer(sourcing_request_item):
+	"""The Supplier Quotation Item chosen on a submitted Sourcing Request line."""
+	if not sourcing_request_item:
+		return None
+	chosen = frappe.db.get_value(
+		"Sourcing Request Item",
+		{"name": sourcing_request_item, "docstatus": 1},
+		["supplier_quotation_item", "min_order_qty"],
+		as_dict=True,
+	)
+	if not chosen or not chosen.supplier_quotation_item:
+		return None
+	rows = _offer_rows(["sqi.name = %(name)s"], {"name": chosen.supplier_quotation_item})
+	return rows[0] if rows else None
+
+
+def _make_purchase_order(mr, supplier, currency, entries, settings, on_date):
+	po = frappe.new_doc("Purchase Order")
+	po.update(
+		{
+			"supplier": supplier,
+			"company": mr.company,
+			"transaction_date": on_date,
+			"currency": currency,
+			"ignore_pricing_rule": 1,
+		}
+	)
+
+	for line, offer, customer_qty in entries:
+		factor = flt(offer.conversion_factor) or 1
+		_customer, excess_qty = purchase_order_split(customer_qty, flt(offer.min_order_qty) * factor)
+		schedule_date = max(getdate(line.schedule_date), on_date) if line.schedule_date else on_date
+		base = {
+			"item_code": line.item_code,
+			"schedule_date": schedule_date,
+			"expected_delivery_date": _expected_delivery_date(offer, schedule_date, on_date),
+			"supplier_quotation": offer.supplier_quotation,
+		}
+
+		customer_row = dict(base, **_offer_quantity(offer, customer_qty, line.stock_uom))
+		customer_row.update(
+			{
+				"warehouse": line.warehouse,
+				"material_request": mr.name,
+				"material_request_item": line.name,
+				"sales_order": line.sales_order,
+				"sales_order_item": line.sales_order_item,
+			}
+		)
+		po.append("items", customer_row)
+
+		if excess_qty > 1e-9:
+			excess_row = dict(base, **_offer_quantity(offer, excess_qty, line.stock_uom))
+			excess_row["warehouse"] = settings.default_purchase_warehouse or line.warehouse
+			po.append("items", excess_row)
+
+	po.schedule_date = min(row.schedule_date for row in po.items)
+	if po.meta.has_field("expected_delivery_date"):
+		# not standard in v14; mandatory on the client's Purchase Order
+		po.expected_delivery_date = max(row.expected_delivery_date for row in po.items)
+	po.insert()
+	return po.name
+
+
+def _offer_quantity(offer, stock_qty, stock_uom):
+	"""Quantity, UOM and rate of a PO line for stock_qty bought on an offer.
+
+	In the offer's UOM when that gives a whole number, linked to the Supplier
+	Quotation Item (ERPNext then requires the same UOM and conversion factor);
+	otherwise in the stock UOM at the offer rate per stock unit, without that link.
+	"""
+	factor = flt(offer.conversion_factor) or 1
+	qty = stock_qty / factor
+	if factor == 1 or abs(qty - round(qty)) < 1e-9:
+		return {
+			"qty": round(qty) if factor != 1 else qty,
+			"uom": offer.uom,
+			"conversion_factor": factor,
+			"rate": flt(offer.rate),
+			"supplier_quotation_item": offer.name,
+		}
+	return {"qty": stock_qty, "uom": stock_uom, "conversion_factor": 1, "rate": flt(offer.rate) / factor}
+
+
+def _requested_sales_order_items(sales_order):
+	"""{sales_order_item: material_request} on Material Requests not cancelled."""
+	rows = frappe.db.sql(
+		"""
+		select mri.sales_order_item, mri.parent
+		from `tabMaterial Request Item` mri
+		where mri.sales_order = %s and mri.docstatus < 2 and ifnull(mri.sales_order_item, '') != ''
+		""",
+		sales_order,
+		as_dict=True,
+	)
+	return {row.sales_order_item: row.parent for row in rows}
+
+
+def _material_request_lines_on_order(material_request):
+	"""{material_request_item: purchase_order} for PO lines not cancelled."""
+	rows = frappe.db.sql(
+		"""
+		select poi.material_request_item, poi.parent
+		from `tabPurchase Order Item` poi
+		where poi.material_request = %s and poi.docstatus < 2 and ifnull(poi.material_request_item, '') != ''
+		""",
+		material_request,
+		as_dict=True,
+	)
+	return {row.material_request_item: row.parent for row in rows}
 
 
 def _schedule_date(line, settings, on_date):
@@ -688,22 +933,3 @@ def _ordered_sales_order_items(sales_order):
 		as_dict=True,
 	)
 	return {row.sales_order_item: row.parent for row in rows}
-
-
-def _material_request_remaining(mr_items):
-	"""{material_request_item: stock qty not yet ordered} for submitted Material Requests."""
-	mr_items = [d for d in mr_items if d]
-	if not mr_items:
-		return {}
-	rows = frappe.db.sql(
-		"""
-		select mri.name, mri.stock_qty - mri.ordered_qty as remaining
-		from `tabMaterial Request Item` mri
-		inner join `tabMaterial Request` mr on mr.name = mri.parent
-		where mri.name in %(items)s and mr.docstatus = 1 and mr.status not in ('Stopped', 'Closed')
-		""",
-		{"items": mr_items},
-		as_dict=True,
-	)
-	return {row.name: flt(row.remaining) for row in rows}
-
