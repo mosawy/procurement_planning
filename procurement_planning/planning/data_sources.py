@@ -758,6 +758,15 @@ def get_back_to_back_sales_order_lines(filters):
 
 
 PURCHASE_LINE_KEYS = ("sales_order_item", "material_request_item")
+PURCHASE_LINE_NUMBERS = (
+	"stock_qty",
+	"received_qty",
+	"base_unit_rate",
+	"landed_cost_percent",
+	"receipt_qty",
+	"receipt_value",
+	"shipped_qty",
+)
 
 
 def get_back_to_back_purchase_lines(keys, key_field="sales_order_item"):
@@ -827,6 +836,9 @@ def get_back_to_back_purchase_lines(keys, key_field="sales_order_item"):
 
 	result = {}
 	for row in rows:
+		# Computed columns come back as Decimal; the cost calculations use floats.
+		for fieldname in PURCHASE_LINE_NUMBERS:
+			row[fieldname] = flt(row.get(fieldname))
 		result.setdefault(row.line_key, []).append(row)
 	return result
 

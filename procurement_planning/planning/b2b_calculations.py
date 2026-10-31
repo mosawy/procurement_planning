@@ -310,3 +310,35 @@ def purchase_progress(po_lines, required_qty, on_date, target_date=None, deliver
 		"expected_arrival": expected,
 		"days_late": late,
 	}
+
+
+def po_line_cost(po_line, default_landed_percent, fx_buffer_percent, company_currency):
+	"""Cost per stock UOM of one back-to-back Purchase Order line (company currency).
+
+	po_line: dict with base_unit_rate (company currency per stock UOM), currency,
+	landed_cost_percent (supplier; empty = default), stock_qty, receipt_qty and
+	receipt_value (Purchase Receipt valuation, which includes Landed Cost
+	Vouchers). Received quantity costs its valuation, the rest the estimate.
+	Returns {estimate, qty, receipt_qty, cost, basis}.
+	"""
+	landed_percent = po_line.get("landed_cost_percent") or default_landed_percent
+	estimate = estimated_landed_cost(
+		po_line.get("base_unit_rate") or 0,
+		landed_percent,
+		fx_buffer_percent,
+		po_line.get("currency") != company_currency,
+	)
+	receipt_qty = po_line.get("receipt_qty") or 0
+	qty = max(po_line.get("stock_qty") or 0, receipt_qty)
+	cost, basis = purchase_line_cost(receipt_qty, po_line.get("receipt_value") or 0, qty - receipt_qty, estimate)
+	return {"estimate": estimate, "qty": qty, "receipt_qty": receipt_qty, "cost": cost, "basis": basis}
+
+
+def sales_line_cost(po_lines, default_landed_percent, fx_buffer_percent, company_currency):
+	"""(qty, weighted unit cost) of a Sales Order line from its Purchase Order lines."""
+	parts = []
+	for po in po_lines:
+		line = po_line_cost(po, default_landed_percent, fx_buffer_percent, company_currency)
+		if line["cost"] is not None:
+			parts.append((line["qty"], line["cost"]))
+	return weighted_average_cost(parts)

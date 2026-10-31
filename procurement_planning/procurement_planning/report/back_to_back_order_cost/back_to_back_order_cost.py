@@ -13,9 +13,8 @@ from frappe.utils import flt
 
 from procurement_planning.planning import data_sources
 from procurement_planning.planning.b2b_calculations import (
-	estimated_landed_cost,
 	margin_percent,
-	purchase_line_cost,
+	po_line_cost,
 	weighted_average_cost,
 )
 from procurement_planning.planning.settings import get_company_settings
@@ -45,18 +44,11 @@ def get_data(filters):
 		children = []
 		parts = []
 		for po in po_lines:
-			landed_percent = (
-				flt(po.landed_cost_percent) if po.landed_cost_percent else settings.default_landed_cost_percent
+			cost_line = po_line_cost(
+				po, settings.default_landed_cost_percent, settings.fx_buffer_percent, company_currency
 			)
-			estimate = estimated_landed_cost(
-				flt(po.base_unit_rate),
-				landed_percent,
-				settings.fx_buffer_percent,
-				po.currency != company_currency,
-			)
-			receipt_qty = flt(po.receipt_qty)
-			qty = max(flt(po.stock_qty), receipt_qty)
-			cost, basis = purchase_line_cost(receipt_qty, flt(po.receipt_value), qty - receipt_qty, estimate)
+			estimate, qty, receipt_qty = cost_line["estimate"], cost_line["qty"], cost_line["receipt_qty"]
+			cost, basis = cost_line["cost"], cost_line["basis"]
 			if cost is not None:
 				parts.append((qty, cost))
 			children.append(

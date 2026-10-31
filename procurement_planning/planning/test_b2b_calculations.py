@@ -19,6 +19,7 @@ from procurement_planning.planning.b2b_calculations import (
 	line_gross_profit,
 	margin_percent,
 	offer_lead_time,
+	po_line_cost,
 	promised_date,
 	purchase_progress,
 	purchase_line_cost,
@@ -27,6 +28,7 @@ from procurement_planning.planning.b2b_calculations import (
 	quotation_rate,
 	rank_offers,
 	selling_rate,
+	sales_line_cost,
 	sourced_qty_change,
 	sourcing_rates,
 	sourcing_request_status,
@@ -250,3 +252,25 @@ class TestPurchaseProgress(unittest.TestCase):
 		self.assertEqual(result["stage"], "Received")
 		self.assertIsNone(result["days_late"])
 		self.assertEqual(purchase_progress([po], 10, self.today, delivered_qty=10)["stage"], "Delivered")
+
+
+class TestOrderCost(unittest.TestCase):
+	def test_po_line_cost(self):
+		# 10 bought at 200 SAR, 4 received at a valuation of 230 each, landed 10 %
+		po = {"base_unit_rate": 200, "currency": "SAR", "landed_cost_percent": 0, "stock_qty": 10,
+			"receipt_qty": 4, "receipt_value": 920}
+		line = po_line_cost(po, 10, 2, "SAR")
+		self.assertAlmostEqual(line["estimate"], 220)
+		self.assertAlmostEqual(line["cost"], (4 * 230 + 6 * 220) / 10)
+		self.assertEqual(line["basis"], "Mixed")
+		# foreign currency adds the FX buffer; the supplier's own landed % wins
+		usd = dict(po, currency="USD", landed_cost_percent=5, receipt_qty=0, receipt_value=0)
+		self.assertAlmostEqual(po_line_cost(usd, 10, 2, "SAR")["estimate"], 214)
+
+	def test_sales_line_cost(self):
+		lines = [
+			{"base_unit_rate": 100, "currency": "SAR", "stock_qty": 10},
+			{"base_unit_rate": 120, "currency": "SAR", "stock_qty": 10},
+		]
+		self.assertEqual(sales_line_cost(lines, 0, 0, "SAR"), (20, 110))
+		self.assertEqual(sales_line_cost([], 10, 2, "SAR"), (0, None))
